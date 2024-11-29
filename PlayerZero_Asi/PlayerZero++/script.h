@@ -1,8 +1,6 @@
 /*
-    THIS FILE IS A PART OF GTA V SCRIPT HOOK SDK
-                http://dev-c.com
-            (C) Alexander Blade 2015
-        --Modified By Adoppocalipt 2023--
+	 Player Zero MainScript
+	--By Adopocalipt 2023--
 */
 
 #pragma once
@@ -11,8 +9,11 @@
 #include "..\inc\types.h"
 #include "..\inc\enums.h"
 
+#include "GtaVMenu.h"
 #include "..\inc\main.h"
 
 void ScriptMain();
 
 void AddChaterBox();
+
+void AddMenuThread();

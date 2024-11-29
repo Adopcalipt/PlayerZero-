@@ -1,25 +1,95 @@
 /*
-	THIS FILE IS A PART OF GTA V SCRIPT HOOK SDK
-				http://dev-c.com
-			(C) Alexander Blade 2015
-		--Modified By Adoppocalipt 2023--
+	 Player Zero MainScript
+	--By Adopocalipt 2023--
 */
 
 #include "script.h"
 #include "keyboard.h"
 #include "PZSys.h"
 
-using namespace std;
 using namespace PZSys;
-using namespace PZclass;
+using namespace PZClass;
 using namespace PZData;
 
 #include <iostream>
 #include <string>
 #include <vector>
 #include <cmath>
+#include <Windows.h>
 
-int AddRelationship(string name)
+std::vector<GVM::GVMSystem> Pz_MenuList = {};
+
+bool PrivateJet = false;
+bool BusDriver = false;
+bool RentoCop = false;
+bool HackAttacks = false;
+bool AddHackAttacks = false;
+
+bool PlayDead = false;
+bool ClosedSession = false;
+bool MissingFunk = false;
+bool InPasiveMode = false;
+bool StartTheMod = true;
+
+int AirVehCount = 0;
+int FollowMe;
+
+Hash GP_Player;
+Hash Gp_Friend;
+Hash GP_Attack;
+Hash Gp_Follow;
+Hash GP_Mental;
+
+JoinMe YouFriend = JoinMe(nullptr);
+
+typedef bool(*SnowFallType)();
+typedef void(*LetItSnowType)(bool On);
+
+bool AccessSnowFallType()
+{
+	bool b = false;
+	if (FileExists(VFunk))
+	{
+		// Load the first .asi file (DLL)
+		HMODULE hMod = LoadLibrary(L"V_Functions.asi");
+		if (hMod != nullptr)
+		{
+			// Get the function pointer
+			SnowFallType MyExportedFunction = (SnowFallType)GetProcAddress(hMod, "SnowFall");
+
+			if (MyExportedFunction != nullptr)
+				b = MyExportedFunction();
+
+			FreeLibrary(hMod);
+		}
+	}
+	else
+		MissingFunk = true;
+
+	return b;
+}
+void AccessLetItSnowType(bool On)
+{
+	if (FileExists(VFunk))
+	{
+		// Load the first .asi file (DLL)
+		HMODULE hMod = LoadLibrary(L"V_Functions.asi");
+		if (hMod != nullptr)
+		{
+			// Get the function pointer
+			LetItSnowType MyExportedFunction = (LetItSnowType)GetProcAddress(hMod, "LetItSnow");
+
+			if (MyExportedFunction != nullptr)
+				MyExportedFunction(On);
+
+			FreeLibrary(hMod);
+		}
+	}
+	else
+		MissingFunk = true;
+}
+
+int AddRelationship(const std::string& name)
 {
 	Hash hash = -1;
 
@@ -31,118 +101,53 @@ Hash GetRelationship()
 {
 	return PED::GET_PED_RELATIONSHIP_GROUP_HASH(PLAYER::PLAYER_PED_ID());
 }
-void RelGroupMember(Ped Peddy, Hash group)
+void RelGroupMember(Ped peddy, Hash group)
 {
 	LoggerLight("-GroupMember-");
 
-	PED::SET_PED_RELATIONSHIP_GROUP_HASH(Peddy, group);
+	PED::SET_PED_RELATIONSHIP_GROUP_HASH(peddy, group);
 }
 
-void EnableSnow(bool bEnable)
-{
-	if (getGameVersion() > eGameVersion::VER_1_0_2944_0_NOSTEAM)
-	{
-		invoke<Void>(0x6E9EF3A33C8899F8, bEnable);
-		invoke<Void>(0xAEEDAD1420C65CC0, bEnable);
-		invoke<Void>(0xA342A3763B3AFB6C, bEnable);
-		invoke<Void>(0x4CC7F0FEA5283FE0, bEnable);
-
-		if (bEnable)
-		{
-			STREAMING::REQUEST_NAMED_PTFX_ASSET("core_snow");
-			if (STREAMING::HAS_NAMED_PTFX_ASSET_LOADED("core_snow"))
-				GRAPHICS::_SET_PTFX_ASSET_NEXT_CALL("core_snow");
-		}
-		else
-			STREAMING::_REMOVE_NAMED_PTFX_ASSET("core_snow");
-	}
-}
-
-void AddGraphics(string graphics)
+void AddGraphics(const std::string& graphics)
 {
 	GRAPHICS::_SET_PTFX_ASSET_NEXT_CALL("scr_xm_orbital");
 }
 
-void MoveEntity(Entity MyEnt, Vector3 position)
+void MoveEntity(Entity ent, Vector3 pos)
 {
-	ENTITY::SET_ENTITY_COORDS(MyEnt, position.x, position.y, position.z, 1, 0, 0, 1);
+	ENTITY::SET_ENTITY_COORDS(ent, pos.x, pos.y, pos.z, 1, 0, 0, 1);
 }
-bool NotTheSame(Vector4 V1, Vector4 V2)
-{
-	bool bTrue = false;
-
-	if (V1.X != V2.X)
-		bTrue = true;
-
-	if (V1.Y != V2.Y)
-		bTrue = true;
-
-	if (V1.Z != V2.Z)
-		bTrue = true;
-
-	if (V1.R != V2.R)
-		bTrue = true;
-
-	return bTrue;
-}
-
-string sVersion = "1.8";
-string sSaveCont = GetDir() + "/Scripts/PlayerZero/SavedContacts.xml";
-string sDisenable = GetDir() + "/PlayerZero/DisablePZ.txt";
-string sXmasTree = "prop_xmas_ext";
-string sMoneyPicker = "";
-string IPhony = "CELLPHONE_IFRUIT";
-
-int iNpcList = 0;
-int ChatSHat = 0;
-bool bHeistPop = true;
-string sTarg = "";
-int GetBack = 5;
-int iAirCount = 0;
-Ped ItsMe = NULL;
-bool ItsSnowing = false;
-
-bool ItsChristmas = false;
-bool ItHalloween = false;
-
-bool DropMoneys = false;
-vector<MoneyBags> MoneyDrops {};
 
 ClothX GetCloths(bool male)
 {
 	LoggerLight("-GetCloths-");
 
 	ClothX cothing = FemaleDefault;
-
-	string OutputFolder = GetDir() + "/Outfits";
+	std::string OutputFolder = DirectOutfitFemale;
 
 	if (male)
 	{
 		cothing = MaleDefault;
-		OutputFolder = GetDir() + "/Outfits/Male";
+		OutputFolder = DirectOutfitMale;
 	}
-	else
-		OutputFolder = GetDir() + "/Outfits/Female";
 
 
-	vector<string> Files = {};
-	for (const auto& entry : std::filesystem::directory_iterator(OutputFolder))
-		Files.push_back(entry.path().string());
+	std::vector<std::string> Files = ReadDirectory(OutputFolder);
 
-	int iRando = 0;
+	int Rando = 0;
 	if (male)
-		iRando = LessRandomInt("Outfits_01", 0, (int)Files.size() - 1);
+		Rando = LessRandomInt("Outfits_01", 0, (int)Files.size() - 1);
 	else
-		iRando = LessRandomInt("Outfits_02", 0, (int)Files.size() - 1);
+		Rando = LessRandomInt("Outfits_02", 0, (int)Files.size() - 1);
 
-	string Cloths = ""; vector<int> ClothA = {};	vector<int> ClothB = {}; vector<int> ExtraA = {}; vector<int> ExtraB = {};
+	std::string Cloths = ""; std::vector<int> ClothA = {};	std::vector<int> ClothB = {}; std::vector<int> ExtraA = {}; std::vector<int> ExtraB = {};
 	int intList = 0;
 
-	vector<string> MyColect = ReadFile(Files[iRando]);
+	std::vector<std::string> MyColect = ReadFile(Files[Rando]);
 
 	for (int i = 0; i < MyColect.size(); i++)
 	{
-		string line = MyColect[i];
+		std::string line = MyColect[i];
 		if (StringContains("Title", line))
 		{
 			Cloths = StingNumbersInt(line);
@@ -200,8 +205,31 @@ ClothX GetCloths(bool male)
 	return cothing;
 }
 
+void PassiveDontShoot()
+{
+	LoggerLight("-PassiveDontShoot-");
+
+	PED::SET_RELATIONSHIP_BETWEEN_GROUPS(0, GP_Player, Gp_Follow);
+	PED::SET_RELATIONSHIP_BETWEEN_GROUPS(0, Gp_Follow, GP_Player);
+
+	PED::SET_RELATIONSHIP_BETWEEN_GROUPS(0, GP_Player, Gp_Friend);
+	PED::SET_RELATIONSHIP_BETWEEN_GROUPS(0, Gp_Friend, GP_Player);
+
+	PED::SET_RELATIONSHIP_BETWEEN_GROUPS(0, GP_Player, GP_Attack);
+	PED::SET_RELATIONSHIP_BETWEEN_GROUPS(0, GP_Attack, GP_Player);
+
+	PED::SET_RELATIONSHIP_BETWEEN_GROUPS(0, GP_Player, GP_Mental);
+	PED::SET_RELATIONSHIP_BETWEEN_GROUPS(0, GP_Mental, GP_Player);
+
+	if (PED::GET_RELATIONSHIP_BETWEEN_GROUPS(GP_Player, GP_Mental) != 0)
+	{
+		WAIT(1000);
+		PassiveDontShoot();
+	}
+}
 void SetRelationType(bool friendly)
 {
+	LoggerLight("-SetRelationType-");
 	if (friendly)
 	{
 		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(0, GP_Player, Gp_Follow);
@@ -216,14 +244,14 @@ void SetRelationType(bool friendly)
 		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Mental, Gp_Follow);
 		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, Gp_Follow, GP_Mental);
 
-		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(2, GP_Player, Gp_Friend);
-		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(2, Gp_Friend, GP_Player);
-
 		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Attack, Gp_Friend);
 		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, Gp_Friend, GP_Attack);
 
-		if (MySettings.Aggression > 4)
-		{
+		if (MySettings.Aggression > 5)
+		{		
+			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(2, GP_Player, Gp_Friend);
+			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(2, Gp_Friend, GP_Player);
+
 			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Player, GP_Attack);
 			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Attack, GP_Player);
 		}
@@ -258,14 +286,14 @@ void SetRelationType(bool friendly)
 		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Mental, Gp_Follow);
 		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, Gp_Follow, GP_Mental);
 
-		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(2, GP_Player, Gp_Friend);
-		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(2, Gp_Friend, GP_Player);
-
 		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Attack, Gp_Friend);
 		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, Gp_Friend, GP_Attack);
 
-		if (MySettings.Aggression > 4)
+		if (MySettings.Aggression > 5)
 		{
+			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(2, GP_Player, Gp_Friend);
+			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(2, Gp_Friend, GP_Player);
+
 			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Player, GP_Attack);
 			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Attack, GP_Player);
 		}
@@ -286,21 +314,21 @@ void SetRelationType(bool friendly)
 
 		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Mental, GP_Mental);
 	}
+
+	if (PED::GET_RELATIONSHIP_BETWEEN_GROUPS(GP_Player, GP_Mental) != 5)
+	{
+		WAIT(1000);
+		SetRelationType(friendly);
+	}
 }
+
+bool ItsChristmas = false;
+bool ItHalloween = false;
 void LoadinData()
 {
 	LoggerLight("-LoadinData-");
 
-	//Pz_Memo::LoadMemFunc();
-
-	FindSettings(&MySettings);
-
-	PZSetMinWait = MySettings.MinWait * 1000;
-	PZSetMaxWait = MySettings.MaxWait * 1000;
-	PZSetMinSession = MySettings.MinSession * 1000;
-	PZSetMaxSession = MySettings.MaxSession * 1000;
-
-	iNextPlayer = InGameTime() + RandomInt(PZSetMinWait, PZSetMaxWait);
+	FindSettings();
 
 	GP_Player = GetRelationship();
 	FollowMe = PED::GET_PED_GROUP_INDEX(PLAYER::PLAYER_PED_ID());
@@ -308,28 +336,14 @@ void LoadinData()
 	GP_Attack = AddRelationship("AttackNPCs");
 	Gp_Follow = AddRelationship("FollowerNPCs");
 	GP_Mental = AddRelationship("MentalNPCs");
-	LoadLang();
-	string Today = TimeDate();
+	LoadLang(MySettings.Pz_Lang);
+
+	std::string Today = TimeDate();
 
 	if (StringContains("Dec", Today))
 	{
-		if (StringContains(" 24 ", Today) || StringContains(" 25 ", Today) || StringContains(" 26 ", Today) || StringContains(" 27 ", Today) || StringContains(" 28 ", Today) || StringContains(" 29 ", Today) || StringContains(" 30 ", Today) || StringContains(" 31 ", Today))
-		{
-			ItsSnowing = true;
+		if (StringContains(" 24 ", Today) || StringContains(" 25 ", Today) || StringContains(" 26 ", Today))
 			ItsChristmas = true;
-			EnableSnow(ItsSnowing);
-			WEAPON::GIVE_WEAPON_TO_PED(PLAYER::PLAYER_PED_ID(), MyHashKey("WEAPON_snowball"), 9999, false, true);
-		}
-	}
-	else if (StringContains("Jan", Today))
-	{
-		if (StringContains(" 1 ", Today))
-		{
-			ItsSnowing = true;
-			ItsChristmas = true;
-			EnableSnow(ItsSnowing);
-			WEAPON::GIVE_WEAPON_TO_PED(PLAYER::PLAYER_PED_ID(), MyHashKey("WEAPON_snowball"), 9999, false, true);
-		}
 	}
 	else if (StringContains("Oct", Today))
 	{
@@ -337,24 +351,48 @@ void LoadinData()
 			ItHalloween = true;
 	}
 
+	FindAddCars();
+
 	SetRelationType(MySettings.FriendlyFire);
 
 	PED::SET_PED_AS_GROUP_LEADER(PLAYER::PLAYER_PED_ID(), FollowMe);
 	PED::SET_GROUP_FORMATION(FollowMe, 3);
 	
-	if (!FileExists(HasOutfits))
-		OutfitFolderTest();
+	MySettings.TFHTA--;
+	if (MySettings.TFHTA < 0 && !MySettings.InviteOnly)
+	{
+		if (LessRandomInt("TFHTAV2", 0, 90) == 13)
+		{
+			AddHackAttacks = true;
+			MySettings.TFHTA = 10;
+		}
+	}
+	
+	OutfitFolderTest();
 
-	PhoneContacts = LoadContacts();
+	if (MySettings.PassiveMode)
+	{	
+		PassiveDontShoot();
+		PLAYER::DISABLE_PLAYER_FIRING(PLAYER::PLAYER_ID(), true);
+		InPasiveMode = true;
+	}
+
+	if (!MySettings.MenuLeftSide)
+		GVM::DefaultRatio.MenuRightSide();
+
+	GVM::DefaultRatio.BlueAndYellow();
+
+	CleanOutOldCalls();
+	LoadContacts();
 }
 
-bool GotThatName(const vector<string>* listing, string name)
+bool GotThatName(const std::vector<std::string>& listing, const std::string& name)
 {
 	LoggerLight("GotThatName");
 	bool b = false;
-	for (int i = 0; i < (int)listing->size(); i++)
+	for (int i = 0; i < (int)listing.size(); i++)
 	{
-		if (listing->at(i) == name)
+		if (listing[i] == name)
 		{
 			b = true;
 			break;
@@ -363,13 +401,13 @@ bool GotThatName(const vector<string>* listing, string name)
 
 	return b;
 }
-int GotYourNumber(const vector<int>* listing, int num)
+int GotYourNumber(const std::vector<int>& listing, int num)
 {
 	LoggerLight("GotThatName");
 	bool b = false;
-	for (int i = 0; i < (int)listing->size(); i++)
+	for (int i = 0; i < (int)listing.size(); i++)
 	{
-		if (listing->at(i) == num)
+		if (listing[i] == num)
 		{
 			b = true;
 			break;
@@ -378,12 +416,12 @@ int GotYourNumber(const vector<int>* listing, int num)
 
 	return b;
 }
-string FindNewName()
+std::string FindNewName()
 {
 	LoggerLight("FindNewName");
 
 	int iS = LessRandomInt("NameFind01", 0, (int)sListOpeniLet.size() - 1);
-	string sName = sListOpeniLet[iS];
+	std::string sName = sListOpeniLet[iS];
 
 	iS = LessRandomInt("NameFind02", 0, (int)sListVowls.size() - 1);
 	sName += sListVowls[iS];
@@ -401,11 +439,11 @@ string FindNewName()
 	}
 	else if (iS < 6)
 	{
-		string s = "";
+		std::string s = "";
 		for (int i = 0; i < 3; i++)
 			s += sListPostfix[RandomInt(0, (int)sListPostfix.size() - 1)];
 
-		string sR = "";
+		std::string sR = "";
 		int iRev = (int)s.length() - 1;
 		while (iRev > -1)
 		{
@@ -428,13 +466,13 @@ string FindNewName()
 	}
 	return sName;
 }
-string SillyNameList()
+std::string SillyNameList()
 {
 	LoggerLight("SillyNameList");
 
-	string name = FindNewName();
+	std::string name = FindNewName();
 
-	while (GotThatName(&PlayerNames, name))
+	while (GotThatName(PlayerNames, name))
 	{
 		name = FindNewName();
 		WAIT(1);
@@ -455,12 +493,12 @@ int UniqueLevels()
 
 	return iNumber1 + (iNumber2 * 10) + (iNumber3 * 100);
 }
-void EraseBlip(Blip MyBlip)
+void EraseBlip(Blip* blip)
 {
-	if (MyBlip != NULL)
+	if (*blip != NULL)
 	{
-		if ((bool)UI::DOES_BLIP_EXIST(MyBlip))
-			UI::REMOVE_BLIP(&MyBlip);
+		if ((bool)UI::DOES_BLIP_EXIST(*blip))
+			UI::REMOVE_BLIP(blip);
 	}
 }
 FaceBank AddFace(bool male)
@@ -478,16 +516,16 @@ FaceBank AddFace(bool male)
 		ShapeSecondID = LessRandomInt("AddFaceF01", 21, 41);
 	}
 
-	float ShapeMix = PZSys::RandomFloat(-0.9, 0.9);
-	float SkinMix = PZSys::RandomFloat(0.9, 0.99);
-	float ThirdMix = PZSys::RandomFloat(-0.9, 0.9);
+	float ShapeMix = RandomFloat(-0.9, 0.9);
+	float SkinMix = RandomFloat(0.9, 0.99);
+	float ThirdMix = RandomFloat(-0.9, 0.9);
 
 	return FaceBank(ShapeFirstID, ShapeSecondID, ShapeMix, SkinMix, ThirdMix);
 }
-vector<FreeOverLay> AddOverLay(bool male)
+std::vector<FreeOverLay> AddOverLay(bool male)
 {
 	LoggerLight("AddOverLay");
-	vector<FreeOverLay> YourOver = {};
+	std::vector<FreeOverLay> YourOver = {};
 
 	for (int i = 0; i < 12; i++)
 	{
@@ -585,10 +623,10 @@ vector<FreeOverLay> AddOverLay(bool male)
 
 	return YourOver;
 }
-vector<Tattoo> AddRandTats(bool male)
+std::vector<Tattoo> AddRandTats(bool male)
 {
 	LoggerLight("AddRandTats");
-	vector<Tattoo> Tatlist = {};
+	std::vector<Tattoo> Tatlist = {};
 
 	if (male)
 	{
@@ -684,29 +722,28 @@ ClothBank NewClothBank()
 	if (LessRandomInt("GotMale", 0, 10) < 5)
 	{
 		bool Male = true;
-		string Model = "mp_m_freemode_01";
+		std::string Model = "mp_m_freemode_01";
 		ClothX Cothing = GetCloths(true);
 		HairSets MyHair = MHairsets[LessRandomInt("MCBank02", 0, (int)MHairsets.size() - 1)];
 		return ClothBank(SillyNameList(), Model, Cothing, AddFace(Male), Male, MyHair, RandomInt(1, 61), RandomInt(1, 61), RandomInt(0, 10), AddOverLay(Male), AddRandTats(Male));
 	}
 	else
 	{
-
 		bool Male = false;
-		string Model = "mp_f_freemode_01";
+		std::string Model = "mp_f_freemode_01";
 		ClothX Cothing = GetCloths(false);
 		HairSets MyHair = FHairsets[LessRandomInt("FCBank02", 0, (int)FHairsets.size() - 1)];
 		return ClothBank(SillyNameList(), Model, Cothing, AddFace(Male), Male, MyHair, RandomInt(1, 61), RandomInt(1, 61), RandomInt(0, 10), AddOverLay(Male), AddRandTats(Male));
 	}
 }
-int OhMyBlip(Vehicle MyVehic)
+int OhMyBlip(Vehicle vic)
 {
 	LoggerLight("OhMyBlip");
 
 	int iBeLip = 0;
-	if (MyVehic != NULL)
+	if (vic != NULL)
 	{
-		int iVehClass = VEHICLE::GET_VEHICLE_CLASS(MyVehic);
+		int iVehClass = VEHICLE::GET_VEHICLE_CLASS(vic);
 
 		if (iVehClass == 14)
 			iBeLip = 427;
@@ -736,104 +773,108 @@ int OhMyBlip(Vehicle MyVehic)
 
 		for (int i = 0; i < vehBlips.size(); i++)
 		{
-			if ((bool)VEHICLE::IS_VEHICLE_MODEL(MyVehic, MyHashKey(vehBlips[i].VehicleKey)))
+			if ((bool)VEHICLE::IS_VEHICLE_MODEL(vic, MyHashKey(vehBlips[i].VehicleKey)))
 				iBeLip = vehBlips[i].BlipNo;
 		}
 	}
 
 	return iBeLip;
 }
+void ClearYourFriend(bool Retry)
+{
+	if (YouFriend.MyBrain != nullptr)
+	{
+		YouFriend.MyBrain->WanBeFriends = false;
 
-void RemoveFromPedList(string played)
-{
-	int iPlace = ReteaveAfk(played);
-	if (iPlace < (int)PedList.size() && iPlace > -1)
-		PedList.erase(PedList.begin() + iPlace);
+		if (Retry)
+			YouFriend.MyBrain->ApprochPlayer = true;
+	}
+
+	YouFriend = JoinMe(nullptr);
 }
-int FindUSeat(Vehicle vMe)
+void WarptoAnyVeh(Vehicle vic, Ped peddy, int seat)
 {
+	LoggerLight("WarptoAnyVeh");
+
+	PED::SET_PED_INTO_VEHICLE(peddy, vic, seat);
+}
+void GetOutVehicle(Ped peddy)
+{
+	LoggerLight("-GetOutVehicle-");
+
+	if ((bool)PED::IS_PED_IN_ANY_VEHICLE(peddy, 0))
+		AI::TASK_LEAVE_VEHICLE(peddy, PED::GET_VEHICLE_PED_IS_IN(peddy, true), 4160);
+}
+void EmptyVeh(Vehicle vic)
+{
+	LoggerLight("PedActions.EmptyVeh");
+
+	if ((bool)ENTITY::DOES_ENTITY_EXIST(vic))
+	{
+		int iSeats = 0;
+		while (iSeats < VEHICLE::GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(vic))
+		{
+			if (!(bool)VEHICLE::IS_VEHICLE_SEAT_FREE(vic, iSeats))
+				GetOutVehicle(VEHICLE::GET_PED_IN_VEHICLE_SEAT(vic, iSeats));
+			iSeats += 1;
+		}
+	}
+}
+
+int FindUSeat(Vehicle vic, bool kickOut)
+{
+	int iSeats = 0;
 	bool bPass = true;
+	Ped Barry = NULL;
 	for (int i = 0; i < (int)GunnerSeat.size(); i++)
 	{
-		if (MyHashKey(GunnerSeat[i]) == ENTITY::GET_ENTITY_MODEL(vMe))
+		if (MyHashKey(GunnerSeat[i]) == ENTITY::GET_ENTITY_MODEL(vic))
 		{
 			bPass = false;
 			break;
 		}
 	}
 
-	int iSeats;
 	if (bPass)
 	{
-		iSeats = 0;
-		while (iSeats < VEHICLE::GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(vMe))
+		if (!kickOut)
 		{
-			if ((bool)VEHICLE::IS_VEHICLE_SEAT_FREE(vMe, iSeats))
-				break;
-			else
-				iSeats++;
+			while (iSeats < VEHICLE::GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(vic))
+			{
+				if ((bool)VEHICLE::IS_VEHICLE_SEAT_FREE(vic, iSeats))
+					break;
+				else
+					iSeats++;
+			}
+			if (iSeats == VEHICLE::GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(vic))
+				iSeats = -10;
 		}
 	}
 	else
 	{
-		iSeats = VEHICLE::GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(vMe);
-		while (iSeats > -1)
+		iSeats = VEHICLE::GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(vic) -1;
+		if (!kickOut)
 		{
-			if ((bool)VEHICLE::IS_VEHICLE_SEAT_FREE(vMe, iSeats))
-				break;
-			else
-				iSeats--;
+			while (iSeats > -1)
+			{
+				if ((bool)VEHICLE::IS_VEHICLE_SEAT_FREE(vic, iSeats))
+					break;
+				else
+					iSeats--;
+			}
+			if (iSeats == -1)
+				iSeats = -10;
 		}
 	}
 
 	return iSeats;
 }
-void WarptoAnyVeh(Vehicle Vhic, Ped Peddy, int iSeat)
-{
-	LoggerLight("WarptoAnyVeh");
-
-	PED::SET_PED_INTO_VEHICLE(Peddy, Vhic, iSeat);
-}
-void GetOutVehicle(Ped Peddy)
-{
-	LoggerLight("-GetOutVehicle-");
-
-	if ((bool)PED::IS_PED_IN_ANY_VEHICLE(Peddy, 0))
-		AI::TASK_LEAVE_VEHICLE(Peddy, PED::GET_VEHICLE_PED_IS_IN(Peddy, true), 4160);
-}
-void EmptyVeh(Vehicle Vhic)
-{
-	LoggerLight("PedActions.EmptyVeh");
-
-	if ((bool)ENTITY::DOES_ENTITY_EXIST(Vhic))
-	{
-		int iSeats = 0;
-		while (iSeats < VEHICLE::GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(Vhic))
-		{
-			if (!(bool)VEHICLE::IS_VEHICLE_SEAT_FREE(Vhic, iSeats))
-				GetOutVehicle(VEHICLE::GET_PED_IN_VEHICLE_SEAT(Vhic, iSeats));
-			iSeats += 1;
-		}
-	}
-}
-bool InSameVeh(Ped Peddy)
-{
-	bool bIn = false;
-	if ((bool)PED::IS_PED_IN_ANY_VEHICLE(Peddy, 0))
-	{
-		Vehicle Vic = PED::GET_VEHICLE_PED_IS_IN(Peddy, true);
-		if ((bool)PED::IS_PED_IN_VEHICLE(PLAYER::PLAYER_PED_ID(), Vic, false))
-			bIn = true;
-	}
-	return bIn;
-}
-
-void ResetPlayer(PlayerBrain* brain, bool Delete)
+void ResetPlayer(PlayerBrain* brain, bool del)
 {
 	if (brain->IsPlane || brain->IsHeli)
-		iAirCount--;
+		AirVehCount--;
 
-	if (brain->ThisVeh != NULL)
+	if (brain->ThisVeh != NULL && brain->Driver)
 	{
 		EmptyVeh(brain->ThisVeh);
 		ENTITY::SET_ENTITY_AS_NO_LONGER_NEEDED(&brain->ThisVeh);
@@ -862,28 +903,30 @@ void ResetPlayer(PlayerBrain* brain, bool Delete)
 
 	if (brain->AirTranspport)
 	{
-		bPlanePort = false;
+		PrivateJet = false;
 		brain->AirTranspport = false;
 		brain->TimeOn = 0;
 	}
 
 	if (brain->BusDriver)
 	{
-		bBusDrivin = false;
+		BusDriver = false;
 		brain->BusDriver = false;
 		brain->TimeOn = 0;
 	}
 	
 	if (brain->RentaCop)
 	{
-		bRentoCop = false;
+		RentoCop = false;
 		brain->RentaCop = false;
 		brain->TimeOn = 0;
 	}
 
-	EraseBlip(brain->ThisBlip);
+	EraseBlip(&brain->ThisBlip);
 
-	if (Delete)
+	UI::_0x31698AA80E0223F8(brain->HeadTag);
+
+	if (del)
 	{
 		if (brain->ThisPed != NULL)
 		{
@@ -891,75 +934,67 @@ void ResetPlayer(PlayerBrain* brain, bool Delete)
 			{
 				ENTITY::DETACH_ENTITY(brain->ThisPed, 0, 0);
 				PED::REMOVE_PED_FROM_GROUP(brain->ThisPed);
-
+				AI::CLEAR_PED_TASKS_IMMEDIATELY(brain->ThisPed);
+				AI::TASK_SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(brain->ThisPed, true);
 				ENTITY::SET_ENTITY_AS_NO_LONGER_NEEDED(&brain->ThisPed);
 			}
 		}
 	}
 }
 
-void PedCleaning(PZclass::PlayerBrain* played, string sOff, bool bDelete)
+void PedCleaning(PlayerBrain* brain, std::string leaving, bool del)
 {
-	LoggerLight("ClearUp.PedCleaning, MyName == " + played->MyName);
-	BottomLeft("~h~" + played->MyName + "~s~ " + sOff);
-	ResetPlayer(played, true);
-	PedList[iNpcList].TimeToGo = true;
-}
+	LoggerLight("ClearUp.PedCleaning, MyName == " + brain->MyName);
+	GVM::BottomLeft("~h~" + brain->MyName + "~s~ " + leaving);
+	ResetPlayer(brain, del);
 
-void BlipFiler(Blip MyBlip, int iBlippy, string sName, int iColour)
-{
-	UI::SET_BLIP_SPRITE(MyBlip, iBlippy);
-	UI::SET_BLIP_AS_SHORT_RANGE(MyBlip, true);
-	UI::SET_BLIP_CATEGORY(MyBlip, 2);
-	UI::SET_BLIP_COLOUR(MyBlip, iColour);
-
-	string name = " Player: " + sName;
-
-	if (sName != "")
+	if (brain->IsInContacts)
 	{
-		UI::BEGIN_TEXT_COMMAND_SET_BLIP_NAME("STRING");
-		UI::_ADD_TEXT_COMPONENT_STRING((LPSTR)name.c_str());
-		UI::END_TEXT_COMMAND_SET_BLIP_NAME(MyBlip);
-
-		//UI::BEGIN_TEXT_COMMAND_SET_BLIP_NAME("STRING");
-		//UI::_ADD_TEXT_COMPONENT_STRING(" Player: " + sName);
-		//UI::END_TEXT_COMMAND_SET_BLIP_NAME( MyBlip);
+		int iCon = RetreaveCont(brain->MyIdentity);
+		if (iCon > -1 && iCon < PhoneContacts.size())
+			AddContacttoList(PhoneContacts[iCon]);
 	}
+
+	brain->TimeToGo = true;
 }
-Blip PedBlimp(Blip CurBlip, Ped pEdd, int iBlippy, string sName, int iColour, bool heading)
+
+void BlipFiler(Blip* blip, int blippy, const std::string& name, int colour)
 {
-	LoggerLight("PedBlimp, iBlippy == " + std::to_string(iBlippy) + ", sName == " + sName + ", iColour" + std::to_string(iColour));
+	UI::SET_BLIP_SPRITE(*blip, blippy);
+	UI::SET_BLIP_AS_SHORT_RANGE(*blip, true);
+	UI::SET_BLIP_CATEGORY(*blip, 2);
+	UI::SET_BLIP_COLOUR(*blip, colour);
 
-	EraseBlip(CurBlip);
+	std::string Name = " Player: " + name;
 
-	Blip MyBlip = UI::ADD_BLIP_FOR_ENTITY(pEdd);;
+	UI::BEGIN_TEXT_COMMAND_SET_BLIP_NAME("STRING");
+	UI::_ADD_TEXT_COMPONENT_STRING((LPSTR)Name.c_str());
+	UI::END_TEXT_COMMAND_SET_BLIP_NAME(*blip);
+}
+void PedBlimp(Blip* blip, Ped peddy, int blippy, const std::string& name, int colour, bool heading)
+{
+	LoggerLight("PedBlimp, blippy == " + std::to_string(blippy) + ", name == " + name + ", colour" + std::to_string(colour));
 
-	BlipFiler(MyBlip, iBlippy, sName, iColour);
+	if (*blip != NULL)
+		EraseBlip(blip);
+
+	*blip = UI::ADD_BLIP_FOR_ENTITY(peddy);;
+
+	BlipFiler(blip, blippy, name, colour);
 	if (heading)
-		UI::_SET_BLIP_SHOW_HEADING_INDICATOR(MyBlip, true);
-
-	return MyBlip;
+		UI::_SET_BLIP_SHOW_HEADING_INDICATOR(*blip, true);
 }
-Blip LocalBlip(Blip CurBlip, Vector4 Vlocal, int iBlippy, string sName, int iColour)
+void LocalBlip(Blip* blip, Vector4 local, int blippy, const std::string& name, int colour)
 {
-	LoggerLight("BuildObjects, iBlippy == " + std::to_string(iBlippy) + ", sName == " + sName);
+	LoggerLight("BuildObjects, blippy == " + std::to_string(blippy) + ", name == " + name);
 
-	EraseBlip(CurBlip);
-	Blip MyBlip = UI::ADD_BLIP_FOR_COORD(Vlocal.X, Vlocal.Y, Vlocal.Z);
-	BlipFiler(MyBlip, iBlippy, sName, iColour);
-	return MyBlip;
+	EraseBlip(blip);
+	*blip = UI::ADD_BLIP_FOR_COORD(local.X, local.Y, local.Z);
+	BlipFiler(blip, blippy, name, colour);
 }
-void BlipingBlip(PZclass::PlayerBrain* brain)
+void BlipingBlip(PlayerBrain* brain)
 {
-	if (PZData::MySettings.NoRadar || brain->OffRadarBool)
-	{
-		if (brain->ThisBlip != NULL)
-		{
-			EraseBlip(brain->ThisBlip);
-			brain->ThisBlip = NULL;
-		}
-	}
-	else
+	if (MySettings.PlayerzBlips && !brain->OffRadarBool)
 	{
 		if ((bool)PED::IS_PED_IN_ANY_VEHICLE(brain->ThisPed, 0))
 		{
@@ -967,12 +1002,9 @@ void BlipingBlip(PZclass::PlayerBrain* brain)
 			{
 				brain->DirBlip = false;
 				if (brain->Driver && brain->ThisVeh != NULL)
-					brain->ThisBlip = PedBlimp(brain->ThisBlip, brain->ThisPed, OhMyBlip(brain->ThisVeh), brain->MyName, brain->BlipColour, brain->DirBlip);
+					PedBlimp(&brain->ThisBlip, brain->ThisPed, OhMyBlip(brain->ThisVeh), brain->MyName, brain->BlipColour, brain->DirBlip);
 				else
-				{
-					EraseBlip(brain->ThisBlip);
-					brain->ThisBlip = NULL;
-				}
+					PedBlimp(&brain->ThisBlip, brain->ThisPed, 1, brain->MyName, brain->BlipColour, brain->DirBlip);
 			}
 		}
 		else
@@ -980,19 +1012,27 @@ void BlipingBlip(PZclass::PlayerBrain* brain)
 			if (!brain->DirBlip)
 			{
 				brain->DirBlip = true;
-				brain->ThisBlip = PedBlimp(brain->ThisBlip, brain->ThisPed, 1, brain->MyName, brain->BlipColour, brain->DirBlip);
+				PedBlimp(&brain->ThisBlip, brain->ThisPed, 1, brain->MyName, brain->BlipColour, brain->DirBlip);
 				UI::_SET_BLIP_SHOW_HEADING_INDICATOR(brain->ThisBlip, 1);
 			}
 			else if (brain->ThisBlip == NULL)
 			{
-				brain->ThisBlip = PedBlimp(brain->ThisBlip, brain->ThisPed, 1, brain->MyName, brain->BlipColour, brain->DirBlip);
+				PedBlimp(&brain->ThisBlip, brain->ThisPed, 1, brain->MyName, brain->BlipColour, brain->DirBlip);
 				UI::_SET_BLIP_SHOW_HEADING_INDICATOR(brain->ThisBlip, 1);
 			}
 		}
 	}
+	else
+	{
+		if (brain->ThisBlip != NULL)
+		{
+			EraseBlip(&brain->ThisBlip);
+			brain->ThisBlip = NULL;
+		}
+	}
 }
 
-void AddMonies(int iAmount)
+void AddMonies(int amount)
 {
 	Hash H1 = ENTITY::GET_ENTITY_MODEL(PLAYER::PLAYER_PED_ID());
 	int iPedCred = -1;
@@ -1004,38 +1044,16 @@ void AddMonies(int iAmount)
 		iPedCred = MyHashKey("SP0_TOTAL_CASH");
 	int Credit = 0;
 	STATS::STAT_GET_INT(iPedCred, &Credit, -1);
-	Credit += iAmount;
+	Credit += amount;
 	STATS::STAT_SET_INT(iPedCred, Credit, 1);
 }
-void PlayerDump(bool KeepFriend)
+void PlayerDump(bool keepFriend)
 {
 	LoggerLight("-PlayerDump-");
-
-	for (int i = 0; i < (int)MakeFrenz.size(); i++)
-	{
-		if (KeepFriend)
-		{
-			if (!MakeFrenz[i].Brains.Follower)
-				MakeFrenz[i].Brains.TimeOn = 0;
-		}
-		else
-			MakeFrenz[i].Brains.TimeOn = 0;
-	}
-
-	for (int i = 0; i < (int)MakeCarz.size(); i++)
-	{
-		if (KeepFriend)
-		{
-			if (!MakeCarz[i].Brains.Follower)
-				MakeCarz[i].Brains.TimeOn = 0;
-		}
-		else
-			MakeCarz[i].Brains.TimeOn = 0;
-	}
-
+		
 	for (int i = 0; i < (int)PedList.size(); i++)
 	{
-		if (KeepFriend)
+		if (keepFriend)
 		{
 			if (!PedList[i].Follower)
 				PedList[i].TimeOn = 0;
@@ -1046,108 +1064,105 @@ void PlayerDump(bool KeepFriend)
 
 	for (int i = 0; i < (int)AFKList.size(); i++)
 		AFKList[i].TimeOn = 0;
-}
-void LaggOut(bool KeepFriend)
-{
-	LoggerLight("-LaggOut-");
-	bPlanePort = false;
-	bBusDrivin = false;
-	bRentoCop = false;
 
-	PlayerDump(KeepFriend);
+}
+
+bool SessionCleaning = false;
+void LaggOut(bool keepFriend)
+{
+	PrivateJet = false;
+	BusDriver = false;
+	RentoCop = false;
+
+	if (!keepFriend)
+		SessionCleaning = true;
+
+	PlayerDump(keepFriend);
 
 	ClearYourFriend(false);
 
-	iAirCount = 0;
+	AirVehCount = 0;
 }
-void RandomChat(string sPed, int itype, int iNat)
+void RandomChat(const std::string& ped, int type, int nat)
 {
-	string sRan = sPed + " [All] ";
+	std::string PreAll = ped + " [All] ";
 
-	if (iNat == 1)
+	if (nat == 1)
 	{
-		if (itype == 1)
-			sRan += ShitGreet01[LessRandomInt("ShitGreet01", 0, (int)ShitGreet01.size() - 1)];
-		else if (itype == 2)
-			sRan += ShitGreet02[LessRandomInt("ShitGreet02", 0, (int)ShitGreet02.size() - 1)];
-		else if (itype == 3)
-			sRan += ShitGreet03[LessRandomInt("ShitGreet03", 0, (int)ShitGreet03.size() - 1)];
-		else if (itype == 4)
-			sRan += ShitGreet04[LessRandomInt("ShitGreet04", 0, (int)ShitGreet04.size() - 1)];
-		else if (itype == 5)
-			sRan += ShitGreet05[LessRandomInt("ShitGreet05", 0, (int)ShitGreet05.size() - 1)];
+		if (type == 1)
+			PreAll += ShitGreet01[LessRandomInt("ShitGreet01", 0, (int)ShitGreet01.size() - 1)];
+		else if (type == 2)
+			PreAll += ShitGreet02[LessRandomInt("ShitGreet02", 0, (int)ShitGreet02.size() - 1)];
+		else if (type == 3)
+			PreAll += ShitGreet03[LessRandomInt("ShitGreet03", 0, (int)ShitGreet03.size() - 1)];
+		else if (type == 4)
+			PreAll += ShitGreet04[LessRandomInt("ShitGreet04", 0, (int)ShitGreet04.size() - 1)];
+		else if (type == 5)
+			PreAll += ShitGreet05[LessRandomInt("ShitGreet05", 0, (int)ShitGreet05.size() - 1)];
 	}
-	else if (iNat == 2)
+	else if (nat == 2)
 	{
-		if (itype == 1)
-			sRan += ShitTalk01[LessRandomInt("ShitTalk01", 0, (int)ShitTalk01.size() - 1)];
-		else if (itype == 2)
-			sRan += ShitTalk02[LessRandomInt("ShitTalk02", 0, (int)ShitTalk02.size() - 1)];
-		else if (itype == 3)
-			sRan += ShitTalk03[LessRandomInt("ShitTalk03", 0, (int)ShitTalk03.size() - 1)];
-		else if (itype == 4)
-			sRan += ShitTalk04[LessRandomInt("ShitTalk04", 0, (int)ShitTalk04.size() - 1)];
-		else if (itype == 5)
-			sRan += ShitTalk05[LessRandomInt("ShitTalk05", 0, (int)ShitTalk05.size() - 1)];
+		if (type == 1)
+			PreAll += ShitTalk01[LessRandomInt("ShitTalk01", 0, (int)ShitTalk01.size() - 1)];
+		else if (type == 2)
+			PreAll += ShitTalk02[LessRandomInt("ShitTalk02", 0, (int)ShitTalk02.size() - 1)];
+		else if (type == 3)
+			PreAll += ShitTalk03[LessRandomInt("ShitTalk03", 0, (int)ShitTalk03.size() - 1)];
+		else if (type == 4)
+			PreAll += ShitTalk04[LessRandomInt("ShitTalk04", 0, (int)ShitTalk04.size() - 1)];
+		else if (type == 5)
+			PreAll += ShitTalk05[LessRandomInt("ShitTalk05", 0, (int)ShitTalk05.size() - 1)];
 	}
-	else if (iNat == 3)
+	else if (nat == 3)
 	{
-		sRan += NoobTalk01[LessRandomInt("NoobTalk01", 0, (int)NoobTalk01.size() - 1)];
+		PreAll += NoobTalk01[LessRandomInt("NoobTalk01", 0, (int)NoobTalk01.size() - 1)];
 	}
-	else if (iNat == 4)
+	else if (nat == 4)
 	{
-		sRan += AppTalk01[LessRandomInt("AppTalk01", 0, (int)AppTalk01.size() - 1)];
+		PreAll += AppTalk01[LessRandomInt("AppTalk01", 0, (int)AppTalk01.size() - 1)];
 	}
-	else if (iNat == 5)
+	else if (nat == 5)
 	{
-		sRan += CrazyTalk01[LessRandomInt("CrazyTalk01", 0, (int)CrazyTalk01.size() - 1)];
+		PreAll += CrazyTalk01[LessRandomInt("CrazyTalk01", 0, (int)CrazyTalk01.size() - 1)];
 	}
 
 	int iTime = InGameTime() + 5000;
 
-	ShitTalk.push_back(ShitTalking(sRan, iTime));
+	ShitTalk.push_back(ShitTalking(PreAll, iTime));
 
-	if ((int)sRan.length() > 43)
+	if ((int)PreAll.length() > 43)
 		ShitTalk.push_back(ShitTalking("", iTime));
 }
-float GroundHight(Vector3 postion)
+float GroundHight(Vector3 pos)
 {
-	float GHight = postion.z;
-	GAMEPLAY::GET_GROUND_Z_FOR_3D_COORD(postion.x, postion.y, postion.z, &GHight, 1);
-	return GHight;
+	float GroundHight = pos.z;
+	GAMEPLAY::GET_GROUND_Z_FOR_3D_COORD(pos.x, pos.y, pos.z, &GroundHight, 1);
+	return GroundHight;
 }
-void StayOnGround(Vehicle Vhick)
+void StayOnGround(Vehicle vic)
 {
 	LoggerLight("StayOnGround");
-	while (!VEHICLE::IS_VEHICLE_ON_ALL_WHEELS(Vhick))
+	while (!VEHICLE::IS_VEHICLE_ON_ALL_WHEELS(vic))
 	{
-		VEHICLE::SET_VEHICLE_ON_GROUND_PROPERLY(Vhick);
+		VEHICLE::SET_VEHICLE_ON_GROUND_PROPERLY(vic);
 		WAIT(10);
 	}
 }
-int PlayerZinSesh(bool IncludeLoad)
+std::vector<Vector3> BuildFlightPath(Vector3 start)
 {
-	if (IncludeLoad)
-		return (int)PedList.size() + (int)AFKList.size() + (int)MakeCarz.size() + (int)MakeFrenz.size();
-	else
-		return (int)PedList.size() + (int)AFKList.size();
-}
-vector<Vector3> BuildFlightPath(Vector3 vStart)
-{
-
-	vector<Vector3> landSand = vector<Vector3>{
-		 NewVector3(225.8934, 2841.527, 200.0402),
-		 NewVector3(796.0992, 3011.926, 90.13193),
-		 NewVector3(1495.307, 3187.998, 41.04951),
-		 NewVector3(1655.049, 3249.205, 41.21964),
-		 NewVector3(1561.392, 3160.818, 41.1649),
-		 NewVector3(1334.507, 2924.953, 98.35621),
-		 NewVector3(798.5253, 2388.362, 282.331),
-		 NewVector3(413.3483, 2034.074, 425.4946),
-		 NewVector3(-175.5016, 1448.899, 598.845),
-		 NewVector3(-349.6658, -187.2563, 398.4032)
+	const std::vector<Vector3> landSand = {
+		NewVector3(2308.72f, 3342.185f, 122.7201f),
+		NewVector3(1714.221f, 3258.899f, 77.91228f),
+		NewVector3(1149.67f, 3101.854f, 40.30316f),
+		NewVector3(1091.371f, 3024.233f, 40.65675f),
+		NewVector3(1135.063f, 3029.95f, 40.4108f),
+		NewVector3(1562.661f, 3141.121f, 85.64391f),
+		NewVector3(798.5253, 2388.362, 282.331),
+		NewVector3(413.3483, 2034.074, 425.4946),
+		NewVector3(-175.5016, 1448.899, 598.845),
+		NewVector3(-349.6658, -187.2563, 398.4032)
 	};
-	vector<Vector3> landLS = vector<Vector3>{
+	const std::vector<Vector3> landLS = {
 		 NewVector3(-1002.727, -1650.774, 134.2087),
 		 NewVector3(-1193.304, -1941.04, 59.51603),
 		 NewVector3(-1571.467, -2617.15, 14.57554),
@@ -1161,184 +1176,139 @@ vector<Vector3> BuildFlightPath(Vector3 vStart)
 		 NewVector3(-169.9742, 1746.14, 484.2034)
 	};
 
-	float f1 = DistanceTo(vStart, landSand[0]);
-	float f2 = DistanceTo(vStart, landLS[0]);
+	float f1 = DistanceTo(start, landSand[0]);
+	float f2 = DistanceTo(start, landLS[0]);
 
 	if (f1 < f2)
-	{
-		FlyMeToo = landLS[0];
 		return landSand;
-	}
 	else
-	{
-		FlyMeToo = landSand[0];
 		return landLS;
-	}
 }
-vector<int> RandVehModsist()
+std::vector<int> RandVehModsist()
 {
-	vector<int> RandMods = {};
+	std::vector<int> RandMods = {};
 
 	for (int i = 0; i < 67; i++)
 		RandMods.push_back(-1);
-
 
 	LoggerLight("RandVehModsist Count == " + std::to_string((int)RandMods.size()));
 
 	return RandMods;
 }
-Prop BuildProps(string sObject, Vector3 vPos, Vector3 vRot, bool bPush, bool bAddtolist)
+Prop BuildProps(const std::string& object, Vector3 pos, Vector3 rot, bool push)
 {
-	LoggerLight("BuildProps,  sObject == " + sObject);
-	Prop Plop = OBJECT::CREATE_OBJECT(MyHashKey(sObject), vPos.x, vPos.y, vPos.z, 1, 1, 1);
-	ENTITY::SET_ENTITY_COORDS(Plop, vPos.x, vPos.y, vPos.z, 0, 0, 0, 1);
-	ENTITY::SET_ENTITY_ROTATION(Plop, vRot.x, vRot.y, vRot.z, 2, 1);
+	LoggerLight("BuildProps,  object == " + object);
+	Prop Plop = OBJECT::CREATE_OBJECT(MyHashKey(object), pos.x, pos.y, pos.z, 1, 1, 1);
+	MoveEntity(Plop, pos);
+	ENTITY::SET_ENTITY_ROTATION(Plop, rot.x, rot.y, rot.z, 2, 1);
 	ENTITY::SET_ENTITY_AS_MISSION_ENTITY(Plop, 1, 1);
-	if (bPush)
+	if (push)
 		ENTITY::APPLY_FORCE_TO_ENTITY(Plop, 1, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1, 1, 1, 1, 1, 1);
 
 	return Plop;
 }
-void OrbExp(Ped PFired, Vector3 Pos1, Vector3 Pos2, Vector3 Pos3, Vector3 Pos4, Vector3 Pos5)
+void OrbExp(Ped ped, Vector3 pos1, Vector3 pos2, Vector3 pos3, Vector3 pos4, Vector3 pos5)
 {
-	LoggerLight("PedActions.OrbExp");
+	LoggerLight("OrbExp");
 
-	FIRE::ADD_OWNED_EXPLOSION(PFired, Pos2.x, Pos2.y, Pos2.z, 49, 1, true, false, 1);
-	FIRE::ADD_OWNED_EXPLOSION(PFired, Pos3.x, Pos3.y, Pos3.z, 49, 1, true, false, 1);
-	FIRE::ADD_OWNED_EXPLOSION(PFired, Pos4.x, Pos4.y, Pos4.z, 49, 1, true, false, 1);
-	FIRE::ADD_OWNED_EXPLOSION(PFired, Pos5.x, Pos5.y, Pos5.z, 49, 1, true, false, 1);
-	FIRE::ADD_OWNED_EXPLOSION(PFired, Pos1.x, Pos1.y, Pos1.z, 54, 1, true, false, 1);
+	FIRE::ADD_OWNED_EXPLOSION(ped, pos2.x, pos2.y, pos2.z, 49, 1, true, false, 1);
+	FIRE::ADD_OWNED_EXPLOSION(ped, pos3.x, pos3.y, pos3.z, 49, 1, true, false, 1);
+	FIRE::ADD_OWNED_EXPLOSION(ped, pos4.x, pos4.y, pos4.z, 49, 1, true, false, 1);
+	FIRE::ADD_OWNED_EXPLOSION(ped, pos5.x, pos5.y, pos5.z, 49, 1, true, false, 1);
+	FIRE::ADD_OWNED_EXPLOSION(ped, pos1.x, pos1.y, pos1.z, 54, 1, true, false, 1);
 
-	AUDIO::PLAY_SOUND_FROM_COORD(-1, "DLC_XM_Explosions_Orbital_Cannon", Pos1.x, Pos1.y, Pos1.z, 0, 0, 1, 0);
+	AUDIO::PLAY_SOUND_FROM_COORD(-1, "DLC_XM_Explosions_Orbital_Cannon", pos1.x, pos1.y, pos1.z, 0, 0, 1, 0);
 	AddGraphics("scr_xm_orbital");
 }
-void OrbLoad(string sWhoDidit, bool bPlayerStrike)
+void OrbLoad(const std::string& whoDidit, const std::string& whoDied, bool playerStrike)
 {
-	LoggerLight("PedActions.OrbLoad, sWhoDidit == " + sWhoDidit);
+	LoggerLight("OrbLoad, whoDidit == " + whoDidit + ", whoDied == " + whoDied);
 
-	if (bPlayerStrike)
-		BottomLeft(PZLang[100] + sWhoDidit + PZLang[101]);
-	else
-		BottomLeft(sWhoDidit + PZLang[102]);
-
-	BigMessage(PZLang[103], "", 3);
-}
-void FireOrb(string sId, Ped Target, bool bPlayerStrike)
-{
-	LoggerLight("FireOrb, sId == " + sId);
-
-	Ped pFired = PLAYER::PLAYER_PED_ID();
-
-	int MyBrian = ReteaveBrain(sId);
-
-	if (MyBrian != -1 && MyBrian < (int)PedList.size())
+	if (playerStrike)
 	{
-		if (!bPlayerStrike)
+		GVM::BottomLeft(PZTranslate[6] + whoDied + PZTranslate[7]);
+		GVM::BigMessage(PZTranslate[9], "", 3);
+	}
+	else
+		GVM::BottomLeft(whoDidit + PZTranslate[9] + " " + whoDied + PZTranslate[7]);
+
+}
+void FireOrb(PlayerBrain* brainShooter, PlayerBrain* brainTarg)
+{
+	LoggerLight("FireOrb");
+
+
+	if (brainTarg != nullptr)
+	{
+		if (brainTarg->ThisPed != NULL)
 		{
-			PedList[MyBrian].ThisBlip = LocalBlip(PedList[MyBrian].ThisBlip, OrbStrike[RandomInt(0, 8)], 590, PedList[MyBrian].MyName, 1);
+			Vector3 TargetPos = ENTITY::GET_ENTITY_COORDS(brainTarg->ThisPed, true);
+			float GHight = GroundHight(TargetPos);
+			if (GHight < TargetPos.z)
+			{
+				Vector3 TargF = FowardOf(brainTarg->ThisPed, 5, true);
+				Vector3 TargB = FowardOf(brainTarg->ThisPed, 5, false);
+				Vector3 TargR = RightOf(brainTarg->ThisPed, 5, true);
+				Vector3 TargL = RightOf(brainTarg->ThisPed, 5, false);
 
-			pFired = PedList[MyBrian].ThisPed;
-			WAIT(7500);
+				Ped PedFire = PLAYER::PLAYER_PED_ID();
+				std::string Blame = "You";
+				std::string Victim = "You";
+				bool PlayerStrike = true;
+				if (brainShooter != nullptr)
+				{
+					if (brainShooter->ThisPed != NULL)
+						PedFire = brainShooter->ThisPed;
+					PlayerStrike = false;
+					Blame = brainShooter->MyName;
+					Victim = brainTarg->MyName;
+				}
+				OrbExp(PedFire, TargetPos, TargF, TargB, TargR, TargL);
+				OrbLoad(Blame, Victim, PlayerStrike);
+				WAIT(4000);
+			}
 		}
-
-		Vector3 TargetPos = ENTITY::GET_ENTITY_COORDS(Target, true);
+	}
+	else
+	{
+		Vector3 TargetPos = ENTITY::GET_ENTITY_COORDS(PLAYER::PLAYER_PED_ID(), true);
 		float GHight = GroundHight(TargetPos);
 		if (GHight < TargetPos.z)
 		{
-			Vector3 TargF = FowardOf(Target, 5, true);
-			Vector3 TargB = FowardOf(Target, 5, false);
-			Vector3 TargR = RightOf(Target, 5, true);
-			Vector3 TargL = RightOf(Target, 5, false);
-			OrbExp(pFired, TargetPos, TargF, TargB, TargR, TargL);
+			Vector3 TargF = FowardOf(PLAYER::PLAYER_PED_ID(), 5, true);
+			Vector3 TargB = FowardOf(PLAYER::PLAYER_PED_ID(), 5, false);
+			Vector3 TargR = RightOf(PLAYER::PLAYER_PED_ID(), 5, true);
+			Vector3 TargL = RightOf(PLAYER::PLAYER_PED_ID(), 5, false);
 
-			OrbLoad(PedList[MyBrian].MyName, bPlayerStrike);
+			Ped PedFire = PLAYER::PLAYER_PED_ID();
+			std::string Blame = "You";
+			std::string Victim = "You";
+			bool PlayerStrike = true;
+
+			if (brainShooter != nullptr)
+			{
+				if (brainShooter->ThisPed != NULL)
+					PedFire = brainShooter->ThisPed;
+				PlayerStrike = false;
+				Blame = brainShooter->MyName;
+			}
+			OrbExp(PedFire, TargetPos, TargF, TargB, TargR, TargL);
+			OrbLoad(Blame, Victim, PlayerStrike);
 			WAIT(4000);
-
-			if (MyBrian != -1)
-			{
-				PedList[MyBrian].TimeOn = 0;
-			}
 		}
 	}
 }
-bool VehicleEnter = false;
 
-const std::vector<std::string> SeatTest = {
-	"CUBAN800", //>
-	"DODO", //>
-	"DUSTER", //>
-	"LUXOR", //>
-	"LUXOR2", //><!-- Luxor Deluxe -->
-	"MAMMATUS", //>
-	"MILJET", //>
-	"ROGUE",
-	"NIMBUS", //>
-	"SHAMAL", //>
-	"VELUM", //>
-	"VELUM2", //><!-- Velum 5-Seater -->
-	"VESTRA", //>
-	"MOGUL", //>
-	"SEABREEZE"
-};
-const std::vector<std::string> Kamakasi = {
-	"CUBAN800", //>
-	"DODO", //>
-	"DUSTER", //>
-	"LUXOR", //>
-	"LUXOR2", //><!-- Luxor Deluxe -->
-	"MAMMATUS", //>
-	"MILJET", //>
-	"NIMBUS", //>
-	"BOMBUSHKA", //><!-- RM-10 Bombushka -->
-	"ALKONOST", //><!-- RO-86 Alkonost -->
-	"SHAMAL", //>
-	"TITAN", //>
-	"VELUM", //>
-	"VELUM2", //><!-- Velum 5-Seater -->
-	"VESTRA", //>
-	"VOLATOL", //>
-	"ALPHAZ1", //>
-	"BESRA", //>
-	"HOWARD", //><!-- Howard NX-25 -->
-	"STUNT", //><!-- Mallard -->
-	"LAZER", //><!-- P-996 LAZER -->
-	"ROGUE", //>
-	"MICROLIGHT", //><!-- Ultralight -->
-	"MOLOTOK" //><!-- V-65 Molotok -->
-};
-bool IsItThePlane(int iCheckList, Vehicle vMe)
+bool HasASeat(Vehicle vic)
 {
-	bool result = false;
-	if (iCheckList == 1)
+	bool bIn = false;
+	if (vic != NULL)
 	{
-		if (!bPlanePort)
-		{
-			for (int i = 0; i < SeatTest.size(); i++)
-			{
-				if ((bool)VEHICLE::IS_VEHICLE_MODEL(vMe, MyHashKey(SeatTest[i])))
-				{
-					result = true;
-					break;
-				}
-			}
-		}
+		if (VEHICLE::GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(vic) > 0)
+			bIn = true;
 	}
-	else
-	{
-		for (int i = 0; i < Kamakasi.size(); i++)
-		{
-			if ((bool)VEHICLE::IS_VEHICLE_MODEL(vMe, MyHashKey(Kamakasi[i])))
-			{
-				result = true;
-				break;
-			}
-		}
-	}
-
-
-	return result;
+	return bIn;
 }
-
 Vector4 FindingShops(Ped peddy)
 {
 	Vector3 PedPos = ENTITY::GET_ENTITY_COORDS(peddy, true);
@@ -1369,14 +1339,16 @@ int YourGunNum()
 
 	return iGun;
 }
-void GunningIt(Ped Peddy, int iGun)
+void GunningIt(Ped peddy, int gun)
 {
 	LoggerLight("GunningIt");
-	WEAPON::REMOVE_ALL_PED_WEAPONS(Peddy, 0);
+	WEAPON::REMOVE_ALL_PED_WEAPONS(peddy, 0);
 
-	vector<string> sWeapList = {};
+	std::vector<std::string> sWeapList = {};
+	if (!MySettings.SpaceWeaps && gun == 10)
+		gun = 9;
 
-	if (iGun == 1)
+	if (gun == 1)
 	{
 		sWeapList.push_back("WEAPON_dagger");  //0x92A27487",
 		sWeapList.push_back("WEAPON_hammer");  //0x4E875F73",
@@ -1384,7 +1356,7 @@ void GunningIt(Ped Peddy, int iGun)
 		sWeapList.push_back("WEAPON_golfclub");  //0x440E4788",
 		sWeapList.push_back("WEAPON_machete");  //0xDD5DF8D9",
 	}
-	else if (iGun == 2)
+	else if (gun == 2)
 	{
 		sWeapList.push_back("WEAPON_dagger");  //0x92A27487",
 		sWeapList.push_back("WEAPON_pipebomb");  //0xBA45E8B8",
@@ -1393,7 +1365,7 @@ void GunningIt(Ped Peddy, int iGun)
 		sWeapList.push_back("WEAPON_sawnoffshotgun");  //0x7846A318",
 		sWeapList.push_back("WEAPON_sniperrifle");  //0x5FC3C11",
 	}
-	else if (iGun == 3)
+	else if (gun == 3)
 	{
 		sWeapList.push_back("WEAPON_hammer");  //0x4E875F73",
 		sWeapList.push_back("WEAPON_revolver");  //0xC1B3C3D1",
@@ -1401,7 +1373,7 @@ void GunningIt(Ped Peddy, int iGun)
 		sWeapList.push_back("WEAPON_pumpshotgun");  //0x1D073A89",
 		sWeapList.push_back("WEAPON_advancedrifle");  //0xAF113F99",
 	}
-	else if (iGun == 4)
+	else if (gun == 4)
 	{
 		sWeapList.push_back("WEAPON_battleaxe");  //0xCD274149",
 		sWeapList.push_back("WEAPON_molotov");  //0x24B17070",
@@ -1410,7 +1382,7 @@ void GunningIt(Ped Peddy, int iGun)
 		sWeapList.push_back("WEAPON_musket");  //0xA89CB99E",
 		sWeapList.push_back("WEAPON_gusenberg");  //0x61012683"--69
 	}
-	else if (iGun == 5)
+	else if (gun == 5)
 	{
 		sWeapList.push_back("WEAPON_golfclub");  //0x440E4788",
 		sWeapList.push_back("WEAPON_grenade");  //0x93E220BD",
@@ -1418,7 +1390,7 @@ void GunningIt(Ped Peddy, int iGun)
 		sWeapList.push_back("WEAPON_assaultshotgun");  //0xE284C527",
 		sWeapList.push_back("WEAPON_mg");  //0x9D07F764",
 	}
-	else if (iGun == 6)
+	else if (gun == 6)
 	{
 		sWeapList.push_back("WEAPON_machete");  //0xDD5DF8D9",
 		sWeapList.push_back("WEAPON_heavypistol");  //0xD205520E",
@@ -1426,19 +1398,19 @@ void GunningIt(Ped Peddy, int iGun)
 		sWeapList.push_back("WEAPON_specialcarbine");  //0xC0A3098D",
 
 	}
-	else if (iGun == 7)
+	else if (gun == 7)
 	{
 		sWeapList.push_back("WEAPON_flashlight");  //0x8BB05FD7",
 		sWeapList.push_back("WEAPON_GADGETPISTOL");  //0xAF3696A1",--new to cayo ppero
 		sWeapList.push_back("WEAPON_MILITARYRIFLE");  //0x624FE830"--65
 		sWeapList.push_back("WEAPON_COMBATSHOTGUN");  //0x5A96BA4--54
 	}
-	else if (iGun == 8)
+	else if (gun == 8)
 	{
 		sWeapList.push_back("WEAPON_marksmanrifle");  //0xC734385A",
 		sWeapList.push_back("WEAPON_marksmanrifle_mk2");  //0x6A6C02E0"--74
 	}
-	else if (iGun == 9)
+	else if (gun == 9)
 	{
 		sWeapList.push_back("WEAPON_pistol_mk2");  //0xBFE256D4",---------19
 		sWeapList.push_back("WEAPON_snspistol_mk2");  //0x88374054",---24
@@ -1452,13 +1424,13 @@ void GunningIt(Ped Peddy, int iGun)
 		sWeapList.push_back("WEAPON_heavysniper_mk2");  //0xA914799",---72
 		sWeapList.push_back("WEAPON_marksmanrifle_mk2");  //0x6A6C02E0"--74
 	}
-	else if (iGun == 10)
+	else if (gun == 10)
 	{
 		sWeapList.push_back("WEAPON_raypistol");  //0xAF3696A1",--36
 		sWeapList.push_back("WEAPON_raycarbine");  //0x476BF155"--44
 		sWeapList.push_back("weapon_rayminigun");
 	}
-	else if (iGun == 15)
+	else if (gun == 15)
 	{
 		sWeapList.push_back("WEAPON_nightstick");  //0xAF3696A1",--36
 		sWeapList.push_back("WEAPON_pistol");  //0x476BF155"--44
@@ -1466,237 +1438,348 @@ void GunningIt(Ped Peddy, int iGun)
 	}
 
 	for (int i = 0; i < sWeapList.size(); i++)
-		WEAPON::GIVE_WEAPON_TO_PED(Peddy, MyHashKey(sWeapList[i]), 9999, false, true);
+		WEAPON::GIVE_WEAPON_TO_PED(peddy, MyHashKey(sWeapList[i]), 9999, false, true);
 }
-void GetInVehicle(Ped Peddy, Vehicle Vhick, int Seat, bool clearSeat)
+void GetInVehicle(Ped peddy, Vehicle vic, int seat)
 {
-	LoggerLight("PlayerEnterVeh");
+	LoggerLight("GetInVehicle, seat == " + std::to_string(seat));
 
-	iFindingTime = InGameTime() + 1000;
+	Vector3 NotMoving = EntityPosition(peddy);
 
-	if (clearSeat)
-		GetOutVehicle(VEHICLE::GET_PED_IN_VEHICLE_SEAT(Vhick, Seat));
+	int ThreePass = 3;
 
-	if (Seat != -1)
+	while (!VEHICLE::IS_VEHICLE_SEAT_FREE(vic, seat))
 	{
-		int ThreePass = 3;
-		AI::TASK_OPEN_VEHICLE_DOOR(Peddy, Vhick, -1, Seat, 1.5f);
-		while (!PED::IS_PED_GETTING_INTO_A_VEHICLE(Peddy))
-		{
-			WAIT(1000);
-			AI::TASK_ENTER_VEHICLE(Peddy, Vhick, -1, Seat, 1.50f, 1, 0);
-			ThreePass--;
-			if (ThreePass < 0)
-				break;
-		}
+		GetOutVehicle(VEHICLE::GET_PED_IN_VEHICLE_SEAT(vic, seat));
+		WAIT(1000);
+	}
 
-		if (ThreePass < 1)
-			WarptoAnyVeh(Vhick, Peddy, Seat);
+	AI::TASK_ENTER_VEHICLE(peddy, vic, -1, seat, 1.0f, 1, 0);
+	WAIT(1000);
+
+	if (DistanceTo(peddy, NotMoving) < 1.0f)
+		WarptoAnyVeh(vic, peddy, seat);
+	else
+	{
+		WAIT(5000);
+		if (vic != PED::GET_VEHICLE_PED_IS_IN(peddy, false))
+			WarptoAnyVeh(vic, peddy, seat);
 	}
 }
-void PlayerEnterVeh(Vehicle Vhick)
+void PlayerEnterVeh(Vehicle vic)
 {
-	VehicleEnter = true;
-	int iSeats = FindUSeat(Vhick);
-	GetInVehicle(PLAYER::PLAYER_PED_ID(), Vhick, iSeats, false);
-	VehicleEnter = false;
+	int Seats = FindUSeat(vic, true);
+	if (Seats != -10)
+		GetInVehicle(PLAYER::PLAYER_PED_ID(), vic, Seats);
 }
-void ForceAnim(Ped peddy, string sAnimDict, string sAnimName, Vector3 AnPos, Vector3 AnRot)
+void ForceAnim(Ped peddy, const std::string& animDict, const std::string& animName, Vector3 pos, Vector3 rot)
 {
-	LoggerLight("ForceAnim, sAnimName == " + sAnimName);
+	LoggerLight("ForceAnim, animName == " + animName);
 
 	AI::CLEAR_PED_TASKS(peddy);
-	STREAMING::REQUEST_ANIM_DICT((LPSTR)sAnimDict.c_str());
-	while (!STREAMING::HAS_ANIM_DICT_LOADED((LPSTR)sAnimDict.c_str()))
+	STREAMING::REQUEST_ANIM_DICT((LPSTR)animDict.c_str());
+	while (!STREAMING::HAS_ANIM_DICT_LOADED((LPSTR)animDict.c_str()))
 		WAIT(1);
-	AI::TASK_PLAY_ANIM_ADVANCED(peddy, (LPSTR)sAnimDict.c_str(), (LPSTR)sAnimName.c_str(), AnPos.x, AnPos.y, AnPos.z, AnRot.x, AnRot.y, AnRot.z, 8.0, 0.00, -1, 1, 0.01, 0, 0);
-	STREAMING::REMOVE_ANIM_DICT((LPSTR)sAnimDict.c_str());
+	AI::TASK_PLAY_ANIM_ADVANCED(peddy, (LPSTR)animDict.c_str(), (LPSTR)animName.c_str(), pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, 8.0f, 0.00f, -1, 1, 0.01f, 0, 0);
+	STREAMING::REMOVE_ANIM_DICT((LPSTR)animDict.c_str());
 }
-void ForceAnim(Ped peddy, string sAnimDict, string sAnimName, Vector4 AnPos)
+void ForceAnim(Ped peddy, const std::string& animDict, const std::string& animName, Vector4 pos)
 {
-	LoggerLight("ForceAnimv4, sAnimName == " + sAnimName);
-	ForceAnim(peddy, sAnimDict, sAnimName, NewVector3(AnPos.X, AnPos.Y, AnPos.Z), NewVector3(0.0f, 0.0f, AnPos.R));
+	LoggerLight("ForceAnimv4, animName == " + animName);
+	ForceAnim(peddy, animDict, animName, NewVector3(pos.X, pos.Y, pos.Z), NewVector3(0.0f, 0.0f, pos.R));
 }
-void FollowPed(Ped Target, Ped Follower)
+void AddSenario(Ped peddy, const std::string& senareo, Vector4 pos, bool sitDown)
 {
-	AI::TASK_FOLLOW_TO_OFFSET_OF_ENTITY(Follower, Target, 0, 0, 0, 45, -1, 10, 1);
+	AI::TASK_START_SCENARIO_AT_POSITION(peddy, (LPSTR)senareo.c_str(), pos.X, pos.Y, pos.Z, pos.R, -1, sitDown, true);
 }
-int LandingGear(Vehicle Vic)
+void FollowPed(Ped target, Ped follower)
+{
+	AI::TASK_FOLLOW_TO_OFFSET_OF_ENTITY(follower, target, 0, 0, 0, 45, -1, 10, 1);
+}
+int LandingGear(Vehicle vic)
 {
 	//	0: Deployed
 	//	1 : Closing
 	//	2 : Opening
 	//	3 : Retracted
-	return VEHICLE::_GET_VEHICLE_LANDING_GEAR(Vic);
+	return VEHICLE::_GET_VEHICLE_LANDING_GEAR(vic);
 }
-void LandNearHeli(Ped Peddy, Vehicle vHick, Vector3 vTarget)
+void LandNearHeli(Ped peddy, Vehicle vic, Vector3 targetPos)
 {
-	AI::CLEAR_PED_TASKS(Peddy);
-	float HeliDesX = vTarget.x;
-	float HeliDesY = vTarget.y;
-	float HeliDesZ = vTarget.z;
-	float HeliSpeed = 35;
-	float HeliLandArea = 10;
-	Vector3 VHickPos = ENTITY::GET_ENTITY_COORDS(vHick, true);
+	AI::CLEAR_PED_TASKS(peddy);
+	float HeliDesX = targetPos.x;
+	float HeliDesY = targetPos.y;
+	float HeliDesZ = targetPos.z;
+	float HeliSpeed = 35.0f;
+	float HeliLandArea = 10.0f;
+	Vector3 VHickPos = ENTITY::GET_ENTITY_COORDS(vic, true);
 	float dx = VHickPos.x - HeliDesX;
 	float dy = VHickPos.y - HeliDesY;
 
-	float HeliDirect = GAMEPLAY::GET_HEADING_FROM_VECTOR_2D(dx, dy) - 180.00f;
+	float HeliDirect = GAMEPLAY::GET_HEADING_FROM_VECTOR_2D(dx, dy) - 180.0f;
 
+	AI::TASK_HELI_MISSION(peddy, vic, 0, 0, HeliDesX, HeliDesY, HeliDesZ, 20, HeliSpeed, HeliLandArea, HeliDirect, -1, -1, -1, 32);
 
-	AI::TASK_HELI_MISSION(Peddy, vHick, 0, 0, HeliDesX, HeliDesY, HeliDesZ, 20, HeliSpeed, HeliLandArea, HeliDirect, -1, -1, -1, 32);
+	PED::SET_PED_FIRING_PATTERN(peddy, MyHashKey("FIRING_PATTERN_BURST_FIRE_HELI"));
 
-	PED::SET_PED_FIRING_PATTERN(Peddy, MyHashKey("FIRING_PATTERN_BURST_FIRE_HELI"));
-
-	PED::SET_PED_KEEP_TASK(Peddy, true);
-	PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(Peddy, true);
+	PED::SET_PED_KEEP_TASK(peddy, true);
+	PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(peddy, true);
 }
-void LandNearPlane(Ped Peddy, Vehicle vHick, Vector3 vStart, Vector3 vFinish)
+void LandNearPlane(Ped peddy, Vehicle vic, Vector3 startPos, Vector3 finishPos)
 {
-	AI::CLEAR_PED_TASKS(Peddy);
-	AI::TASK_PLANE_LAND(Peddy, vHick, vStart.x, vStart.y, vStart.z, vFinish.x, vFinish.y, vFinish.z);
-	PED::SET_PED_KEEP_TASK(Peddy, true);
-	PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(Peddy, true);
+	AI::CLEAR_PED_TASKS(peddy);
+	AI::TASK_PLANE_LAND(peddy, vic, startPos.x, startPos.y, startPos.z, finishPos.x, finishPos.y, finishPos.z);
+	PED::SET_PED_KEEP_TASK(peddy, true);
+	PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(peddy, true);
 }
-void WalkHere(Ped Peddy, Vector4 Dest)
+void WalkHere(Ped peddy, Vector3 pos)
 {
-	AI::CLEAR_PED_TASKS(Peddy);
-	AI::TASK_FOLLOW_NAV_MESH_TO_COORD(Peddy, Dest.X, Dest.Y, Dest.Z, 1.0, -1, 0.0, false, 0.0);
-	PED::SET_PED_KEEP_TASK(Peddy, true);
+	AI::CLEAR_PED_TASKS(peddy);
+	AI::TASK_FOLLOW_NAV_MESH_TO_COORD(peddy, pos.x, pos.y, pos.z, 1.0, -1, 0.0, false, 0.0);
+	PED::SET_PED_KEEP_TASK(peddy, true);
 }
-void RunHere(Ped Peddy, Vector3 Dest)
+void WalkHere(Ped peddy, Vector4 pos)
 {
-	AI::CLEAR_PED_TASKS(Peddy);
-	AI::TASK_FOLLOW_NAV_MESH_TO_COORD(Peddy, Dest.x, Dest.y, Dest.z, 2.0, -1, 0.0, false, 0.0);
-	PED::SET_PED_KEEP_TASK(Peddy, true);
+	WalkHere(peddy, NewVector3(pos.X, pos.Y, pos.Z));
 }
-void DriveAround(Ped Peddy)
+void RunHere(Ped peddy, Vector3 pos)
 {
-	AI::CLEAR_PED_TASKS(Peddy);
-	if ((bool)PED::IS_PED_IN_ANY_VEHICLE(Peddy, 0))
+	AI::CLEAR_PED_TASKS(peddy);
+	AI::TASK_FOLLOW_NAV_MESH_TO_COORD(peddy, pos.x, pos.y, pos.z, 2.0, -1, 0.0, false, 0.0);
+	PED::SET_PED_KEEP_TASK(peddy, true);
+}
+void RunHere(Ped Peddy, Vector4 pos)
+{
+	RunHere(Peddy, NewVector3(pos.X, pos.Y, pos.Z));
+}
+void DriveAround(Ped peddy)
+{
+	AI::CLEAR_PED_TASKS(peddy);
+	if ((bool)PED::IS_PED_IN_ANY_VEHICLE(peddy, 0))
 	{
-		if (Peddy == VEHICLE::GET_PED_IN_VEHICLE_SEAT(PED::GET_VEHICLE_PED_IS_USING(Peddy), -1))
+		if (peddy == VEHICLE::GET_PED_IN_VEHICLE_SEAT(PED::GET_VEHICLE_PED_IS_USING(peddy), -1))
 		{
-			Vehicle Vick = PED::GET_VEHICLE_PED_IS_IN(Peddy, false);
+			Vehicle Vic = PED::GET_VEHICLE_PED_IS_IN(peddy, false);
 
-			AI::TASK_VEHICLE_DRIVE_WANDER(Peddy, Vick, 25, 262972);
-			PED::SET_PED_KEEP_TASK(Peddy, true);
-			PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(Peddy, true);
+			AI::TASK_VEHICLE_DRIVE_WANDER(peddy, Vic, 25, 262956);
+			PED::SET_PED_KEEP_TASK(peddy, true);
+			PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(peddy, true);
 		}
 	}
 
 }
-void DriveToooDest(Ped Peddy, Vehicle Vick, Vector3 Vme, float fSpeed, bool Blocking, bool RunOver, bool PlaneTaxi)
+void DriveToooDest(Ped peddy, Vehicle vic, Vector3 pos, float speed, bool blocking, bool runOver, bool planeTaxi)
 {
-	AI::CLEAR_PED_TASKS(Peddy);
-	if ((bool)PED::IS_PED_IN_ANY_VEHICLE(Peddy, 0))
+	AI::CLEAR_PED_TASKS(peddy);
+	if ((bool)PED::IS_PED_IN_ANY_VEHICLE(peddy, 0))
 	{
-		if (RunOver)
-			AI::TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(Peddy, Vick, Vme.x, Vme.y, Vme.z, fSpeed, 262972, 0.1f);
-		else if (PlaneTaxi)
-			AI::TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(Peddy, Vick, Vme.x, Vme.y, Vme.z, fSpeed, 16777216, 1.0f);
+		if (runOver)
+			AI::TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(peddy, vic, pos.x, pos.y, pos.z, speed, 262956, 0.1f);
+		else if (planeTaxi)
+			AI::TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(peddy, vic, pos.x, pos.y, pos.z, speed, 16777216, 1.0f);
 		else
-			AI::TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(Peddy, Vick, Vme.x, Vme.y, Vme.z, fSpeed, 1073742652, 5.0f);//536871355
+			AI::TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE(peddy, vic, pos.x, pos.y, pos.z, speed, 1074528293, 15.0f);//536871355
 
-		PED::SET_PED_KEEP_TASK(Peddy, true);
-		if (Blocking)
-			PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(Peddy, true);
+		PED::SET_PED_KEEP_TASK(peddy, true);
+		if (blocking)
+			PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(peddy, true);
 	}
 }
-void DriveBye(Ped Peddy, Vehicle Vick, Ped Target, bool Driver)
+void FollowThatCart(Ped peddy, Vehicle vic, Ped target, bool attack)
 {
-	AI::CLEAR_PED_TASKS(Peddy);
-	if ((bool)PED::IS_PED_IN_ANY_VEHICLE(Peddy, 0))
+	AI::CLEAR_PED_TASKS(peddy);
+	if ((bool)PED::IS_PED_IN_ANY_VEHICLE(peddy, 0))
 	{
-		AI::TASK_VEHICLE_SHOOT_AT_PED(Peddy, Target, 5);
-		if (Driver)
+		if (attack)
 		{
-			if ((bool)PED::IS_PED_IN_ANY_VEHICLE(Target, 0))
-				AI::TASK_VEHICLE_CHASE(Peddy, Target);
+			AI::TASK_VEHICLE_CHASE(peddy, target);
+			AI::SET_TASK_VEHICLE_CHASE_IDEAL_PURSUIT_DISTANCE(peddy, 15.0f);
+		}
+		else
+		{
+			if ((bool)PED::IS_PED_IN_ANY_VEHICLE(target, 0))
+			{
+				Vehicle TargVeh = PED::GET_VEHICLE_PED_IS_IN(target, false);
+				float fSpeeds = VEHICLE::_GET_VEHICLE_SPEED(TargVeh);
+				AI::TASK_VEHICLE_ESCORT(peddy, vic, TargVeh, -1, fSpeeds, 262956, 30.0f, -1, 0.1f);
+			}
 			else
-				DriveToooDest(Peddy, Vick, ENTITY::GET_ENTITY_COORDS(Target, true), 45.0f, true, true, false);
+			{
+				WEAPON::REMOVE_ALL_PED_WEAPONS(peddy, true);
+				AI::TASK_VEHICLE_CHASE(peddy, target);
+				AI::SET_TASK_VEHICLE_CHASE_IDEAL_PURSUIT_DISTANCE(peddy, 35.0f);
+			}
 		}
 	}
 }
-void FlyHeli(Ped Pedd, Vehicle Vhick, Vector3 vHeliDest, float fSpeed, float flanding)
+void FollowThatRaming(Ped peddy, Vehicle vic, Ped target)
 {
-	ENTITY::FREEZE_ENTITY_POSITION(Vhick, false);
-	AI::CLEAR_PED_TASKS(Pedd);
+	AI::CLEAR_PED_TASKS(peddy);
+	if ((bool)PED::IS_PED_IN_ANY_VEHICLE(peddy, 0))
+	{
+		WEAPON::REMOVE_ALL_PED_WEAPONS(peddy, true);
+		AI::TASK_VEHICLE_CHASE(peddy, target);
+		AI::SET_TASK_VEHICLE_CHASE_IDEAL_PURSUIT_DISTANCE(peddy, 5.0f);
+	}
+}
+void DriveBye(Ped peddy, Vehicle vic, Ped target, bool driver)
+{
+	AI::CLEAR_PED_TASKS(peddy);
+	if ((bool)PED::IS_PED_IN_ANY_VEHICLE(peddy, 0))
+	{
+		AI::TASK_VEHICLE_SHOOT_AT_PED(peddy, target, 5);
+		if (driver)
+		{
+			if ((bool)PED::IS_PED_IN_ANY_VEHICLE(target, 0))
+				AI::TASK_VEHICLE_CHASE(peddy, target);
+			else
+				DriveToooDest(peddy, vic, ENTITY::GET_ENTITY_COORDS(target, true), 45.0f, true, true, false);
+		}
+	}
+}
+void FlyHeli(Ped peddy, Vehicle vic, Vector3 destPos, float speed, float landing)
+{
+	float ActualGround = 0.0f;
+	GAMEPLAY::GET_GROUND_Z_FOR_3D_COORD(destPos.x, destPos.y, destPos.z, &ActualGround, 0);
+	if (ActualGround > destPos.z)
+		destPos.z = ActualGround;
+	ENTITY::FREEZE_ENTITY_POSITION(vic, false);
+	AI::CLEAR_PED_TASKS(peddy);
+	float HeliDesX = destPos.x;
+	float HeliDesY = destPos.y;
+	float HeliDesZ = destPos.z;
+	float HeliSpeed = speed;
+	float HeliLandArea = landing;
+
+	Vector3 VHickPos = ENTITY::GET_ENTITY_COORDS(peddy, true);
+
+	float Dx = VHickPos.x - HeliDesX;
+	float Dy = VHickPos.y - HeliDesY;
+	float HeliDirect = GAMEPLAY::GET_HEADING_FROM_VECTOR_2D(Dx, Dy) - 180.00f;
+
+	AI::TASK_HELI_MISSION(peddy, vic, 0, 0, HeliDesX, HeliDesY, HeliDesZ, 9, HeliSpeed, HeliLandArea, HeliDirect, -1, -1, -1, 0);
+	PED::SET_PED_FIRING_PATTERN(peddy, MyHashKey("FIRING_PATTERN_BURST_FIRE_HELI"));
+	PED::SET_PED_KEEP_TASK(peddy, true);
+	PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(peddy, true);
+}
+void ChaseHeli(Ped peddy, Vehicle vic, Ped victim)
+{
+	Vector3 vHeliDest = EntityPosition(victim);
+	ENTITY::FREEZE_ENTITY_POSITION(vic, false);
+	AI::CLEAR_PED_TASKS(peddy);
+
 	float HeliDesX = vHeliDest.x;
 	float HeliDesY = vHeliDest.y;
-	float HeliDesZ = vHeliDest.z;
-	float HeliSpeed = fSpeed;
-	float HeliLandArea = flanding;
+	float HeliDesZ = vHeliDest.z + 25.0f;
+	float HeliSpeed = 5.0f;
 
-	Vector3 VHickPos = ENTITY::GET_ENTITY_COORDS(Pedd, true);
+	if (DistanceTo(peddy, victim) > 65.0f)
+		HeliSpeed = 45.0f;
+
+	float HeliLandArea = 45.00f;
+
+	Vector3 VHickPos = ENTITY::GET_ENTITY_COORDS(vic, true);
 
 	float dx = VHickPos.x - HeliDesX;
 	float dy = VHickPos.y - HeliDesY;
 	float HeliDirect = GAMEPLAY::GET_HEADING_FROM_VECTOR_2D(dx, dy) - 180.00f;
 
-	AI::TASK_HELI_MISSION(Pedd, Vhick, 0, 0, HeliDesX, HeliDesY, HeliDesZ, 9, HeliSpeed, HeliLandArea, HeliDirect, -1, -1, -1, 0);
-	PED::SET_PED_FIRING_PATTERN(Pedd, MyHashKey("FIRING_PATTERN_BURST_FIRE_HELI"));
-	PED::SET_PED_KEEP_TASK(Pedd, true);
-	PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(Pedd, true);
+	AI::TASK_HELI_CHASE(peddy, victim, 0.0f, 0.0f, 35.0f);
+
+	PED::SET_PED_FIRING_PATTERN(peddy, MyHashKey("FIRING_PATTERN_BURST_FIRE_HELI"));
+	PED::SET_PED_KEEP_TASK(peddy, true);
+	PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(peddy, true);
 }
-void FlyPlane(Ped Pedd, Vehicle Vhick, Vector3 vPlaneDest, Ped AttackPed)
+void FlyPlane(Ped peddy, Vehicle vic, Vector3 pos, Ped target, bool fightPed, int vehType)
 {
-	float fAngle = GetAngle(ENTITY::GET_ENTITY_COORDS(Vhick, true), vPlaneDest);
-	AI::CLEAR_PED_TASKS(Pedd);
+	float Angle = GetAngle(ENTITY::GET_ENTITY_COORDS(vic, true), pos);
+	AI::CLEAR_PED_TASKS(peddy);
 
-	if (AttackPed != NULL)
+	if (target != NULL)
 	{
-		if (IsItThePlane(2, Vhick))
-			AI::TASK_PLANE_MISSION(Pedd, Vhick, 0, 0, vPlaneDest.x, vPlaneDest.y, vPlaneDest.z, 4, 20.0f, 50.0f, fAngle, vPlaneDest.z + 10.0f, vPlaneDest.z - 10.0f);
-		else
-			AI::TASK_PLANE_MISSION(Pedd, Vhick, 0, AttackPed, 0, 0, 0, 6, 0.0f, 0.0f, fAngle, 5000.0f, -10.0f);
-		PED::SET_PED_FLEE_ATTRIBUTES(Pedd, 0, true);
-	}
-	else
-		AI::TASK_PLANE_MISSION(Pedd, Vhick, 0, 0, vPlaneDest.x, vPlaneDest.y, vPlaneDest.z, 4, 20.0f, 50.0f, fAngle, vPlaneDest.z + 100.0f, vPlaneDest.z -100.0f);
-
-	PED::SET_PED_KEEP_TASK(Pedd, true);
-	PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(Pedd, true);
-}
-void PedDoGetIn(Vehicle GetV, Ped Peddy, string sId)
-{
-	int iSeats = FindUSeat(GetV);
-	Vector3 PedPos = ENTITY::GET_ENTITY_COORDS(Peddy, true);
-	Vector3 VehPos = ENTITY::GET_ENTITY_COORDS(GetV, true);
-
-	if (iSeats > -1)
-	{
-		if (DistanceTo(PedPos, VehPos) < 65.00)
+		if (fightPed)
 		{
-			GetInVehicle(Peddy, GetV, iSeats, false);
+			if (vehType == 3)
+				AI::TASK_PLANE_MISSION(peddy, vic, 0, 0, pos.x, pos.y, pos.z, 4, 20.0f, 50.0f, Angle, pos.z + 10.0f, pos.z - 10.0f);
+			else
+				AI::TASK_PLANE_MISSION(peddy, vic, 0, target, 0, 0, 0, 6, 0.0f, 0.0f, Angle, 5000.0f, -10.0f);
+			PED::SET_PED_FLEE_ATTRIBUTES(peddy, 0, true);
+			PED::SET_PED_KEEP_TASK(peddy, true);
+			PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(peddy, true);
 		}
 		else
-			WarptoAnyVeh(GetV, Peddy, iSeats);
+		{
+			Vehicle Pv = GetPedsVehicle(target);
+			Vector3 Pos = EntityPosition(target);
+			if (Pv != NULL)
+				AI::TASK_PLANE_CHASE(peddy, target, 0, -10.0f, 10.0f);
+			else
+				AI::TASK_PLANE_MISSION(peddy, vic, 0, 0, Pos.x, Pos.y, Pos.z + 255.0f, 4, 20.0f, 50.0f, Angle, 5000.0f, -100.0f);
+
+			PED::SET_PED_FLEE_ATTRIBUTES(peddy, 0, true);
+			PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(peddy, false);
+		}
 	}
-}
-void GreefWar(Ped Peddy, Ped Victim)
-{
-	if (Victim != NULL)
+	else
 	{
-		AI::CLEAR_PED_TASKS(Peddy);
-		PED::SET_PED_FLEE_ATTRIBUTES(Peddy, 0, true);
-		PED::SET_PED_COMBAT_ATTRIBUTES(Peddy, 46, true);
+		AI::TASK_PLANE_MISSION(peddy, vic, 0, 0, pos.x, pos.y, pos.z, 4, 20.0f, 50.0f, Angle, pos.z + 100.0f, pos.z - 100.0f);
 
-		AI::TASK_COMBAT_PED(Peddy, Victim, 0, 16);
+		PED::SET_PED_KEEP_TASK(peddy, true);
+		PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(peddy, true);
 	}
 }
-void FightPlayer(PZclass::PlayerBrain* brain)
+void PickFight(Ped peddy, Vehicle vic, Ped target, int prefVeh)
 {
-	bool bInVeh = false;
+	if (target != NULL)
+	{
+		Vector3 FighterPos = EntityPosition(target);
 
-	if (brain->Driver || brain->Passenger)
-		bInVeh = true;
+		if (prefVeh == 3 || prefVeh == 5)
+			FlyPlane(peddy, vic, FighterPos, target, true, prefVeh);
+		else if (prefVeh == 2 || prefVeh == 4)
+			ChaseHeli(peddy, vic, target);
+		else
+			DriveBye(peddy, vic, target, true);
+	}
+}
+bool PedDoGetIn(Vehicle vic, PlayerBrain* brain)
+{
+	bool b = false;
+	if (brain->ThisPed != NULL)
+	{
+		int Seats = FindUSeat(vic, false);
+		Vector3 PedPos = ENTITY::GET_ENTITY_COORDS(brain->ThisPed, true);
+		Vector3 VehPos = ENTITY::GET_ENTITY_COORDS(vic, true);
 
+		if (Seats > -1)
+		{
+			if (DistanceTo(PedPos, VehPos) < 65.00)
+				GetInVehicle(brain->ThisPed, vic, Seats);
+			else
+				WarptoAnyVeh(vic, brain->ThisPed, Seats);
+			b = true;
+			brain->Passenger = true;
+		}
+	}
+	return b;
+}		// Add a ped summon own veh...
+void GreefWar(Ped peddy, Ped victim)
+{
+	if (victim != NULL)
+	{
+		AI::CLEAR_PED_TASKS(peddy);
+		PED::SET_PED_FLEE_ATTRIBUTES(peddy, 0, true);
+		PED::SET_PED_COMBAT_ATTRIBUTES(peddy, 46, true);
+
+		AI::TASK_COMBAT_PED(peddy, victim, 0, 16);
+	}
+}
+void FightPlayer(PlayerBrain* brain)
+{
 	brain->BlipColour = 1;
 	brain->Friendly = false;
 	brain->WanBeFriends = false;
 	brain->ApprochPlayer = false;
-	brain->TimeOn += 120000;
 
 	UI::SET_BLIP_COLOUR(brain->ThisBlip, 1);
 	PED::REMOVE_PED_FROM_GROUP(brain->ThisPed);
@@ -1705,193 +1788,224 @@ void FightPlayer(PZclass::PlayerBrain* brain)
 		RelGroupMember(brain->ThisPed, GP_Mental);
 	else
 		RelGroupMember(brain->ThisPed, GP_Attack);
-
-	/*
-	AI::CLEAR_PED_TASKS_IMMEDIATELY(brain->ThisPed);
-	if (!bInVeh)
-		GreefWar(brain->ThisPed, PLAYER::PLAYER_PED_ID());
-	else
-		DriveBye(brain->ThisPed, PED::GET_VEHICLE_PED_IS_IN(brain->ThisPed, false), PLAYER::PLAYER_PED_ID(), brain->Driver);
-	*/
 }
 
-void FightTogether(Vehicle myVeh, Ped myTarget)
+void FightTogether(Vehicle vic, Ped peddy)
 {
 	for (int i = 0; i < (int)PedList.size(); i++)
 	{
 		if (PedList[i].Passenger)
 		{
-			if (PedList[i].ThisVeh == myVeh)
-				DriveBye(PedList[i].ThisPed, myVeh, myTarget, false);
+			if (PedList[i].ThisVeh == vic)
+				DriveBye(PedList[i].ThisPed, vic, peddy, false);
 		}
 	}
 }
-Ped FindAFight(Ped Attacker, bool Friend, bool inPlane, bool inHeli)
+Ped FindAFight(PlayerBrain* brain)
 {
-	Ped Fight = NULL;
-	float Dist = 4000.0f;
-	int You = -1;
-
-	if (inPlane)
+	Ped FightMe = NULL;
+	if (brain != nullptr)
 	{
-		for (int i = 0; i < (int)PedList.size(); i++)
-		{
-			if (MySettings.Aggression > 9)
-			{
-				if (PedList[i].ThisPed != Attacker && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed)
-				{
-					if (PedList[i].IsPlane || PedList[i].IsHeli)
-						You = i;
-				}
-			}
-			else
-			{
-				if (PedList[i].ThisPed != Attacker && PedList[i].Friendly != Friend && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && PedList[i].IsPlane)
-				{
-					if (PedList[i].IsPlane || PedList[i].IsHeli)
-						You = i;
-				}
-			}
-		}
-
-		if (You == -1)
+		float Dist = 4000.0f;
+		int You = -1;
+		bool Friend = brain->Friendly;
+		if (brain->IsPlane)
 		{
 			for (int i = 0; i < (int)PedList.size(); i++)
 			{
-				if (MySettings.Aggression > 9)
+				if (MySettings.Aggression > 9 || brain->TheHacker)
 				{
-					if (PedList[i].ThisPed != Attacker && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed)
+					if (PedList[i].ThisPed != brain->ThisPed && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed)
 					{
-						if (DistanceTo(PedList[i].ThisPed, Attacker) < Dist)
+						if (PedList[i].IsPlane || PedList[i].IsHeli)
+							You = i;
+					}
+				}
+				else
+				{
+					if (PedList[i].ThisPed != brain->ThisPed && PedList[i].Friendly != Friend && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && PedList[i].IsPlane)
+					{
+						if (PedList[i].IsPlane || PedList[i].IsHeli)
+							You = i;
+					}
+				}
+			}
+
+			if (You == -1)
+			{
+				for (int i = 0; i < (int)PedList.size(); i++)
+				{
+					if (MySettings.Aggression > 9 || brain->TheHacker)
+					{
+						if (PedList[i].ThisPed != brain->ThisPed && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed)
 						{
-							Dist = DistanceTo(PedList[i].ThisPed, Attacker);
+							if (DistanceTo(PedList[i].ThisPed, brain->ThisPed) < Dist)
+							{
+								Dist = DistanceTo(PedList[i].ThisPed, brain->ThisPed);
+								You = i;
+							}
+						}
+					}
+					else
+					{
+						if (PedList[i].ThisPed != brain->ThisPed && PedList[i].Friendly != Friend && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed)
+						{
+							if (DistanceTo(PedList[i].ThisPed, brain->ThisPed) < Dist)
+							{
+								Dist = DistanceTo(PedList[i].ThisPed, brain->ThisPed);
+								You = i;
+							}
+						}
+					}
+				}
+			}
+		}
+		else if (brain->IsHeli)
+		{
+			for (int i = 0; i < (int)PedList.size(); i++)
+			{
+				if (MySettings.Aggression > 9 || brain->TheHacker)
+				{
+					if (PedList[i].ThisPed != brain->ThisPed && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && PedList[i].IsHeli)
+						You = i;
+				}
+				else
+				{
+					if (PedList[i].ThisPed != brain->ThisPed && PedList[i].Friendly != Friend && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && PedList[i].IsHeli)
+						You = i;
+				}
+			}
+
+			if (You == -1)
+			{
+				for (int i = 0; i < (int)PedList.size(); i++)
+				{
+					if (MySettings.Aggression > 9)
+					{
+						if (PedList[i].ThisPed != brain->ThisPed && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && !PedList[i].IsPlane)
+						{
+							if (DistanceTo(PedList[i].ThisPed, brain->ThisPed) < Dist)
+							{
+								Dist = DistanceTo(PedList[i].ThisPed, brain->ThisPed);
+								You = i;
+							}
+						}
+					}
+					else
+					{
+						if (PedList[i].ThisPed != brain->ThisPed && PedList[i].Friendly != Friend && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && !PedList[i].IsPlane)
+						{
+							if (DistanceTo(PedList[i].ThisPed, brain->ThisPed) < Dist)
+							{
+								Dist = DistanceTo(PedList[i].ThisPed, brain->ThisPed);
+								You = i;
+							}
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			for (int i = 0; i < (int)PedList.size(); i++)
+			{
+				if (MySettings.Aggression > 9 || brain->TheHacker)
+				{
+					if (PedList[i].ThisPed != brain->ThisPed && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && !PedList[i].IsPlane && !PedList[i].IsHeli)
+					{
+						if (DistanceTo(PedList[i].ThisPed, brain->ThisPed) < Dist)
+						{
+							Dist = DistanceTo(PedList[i].ThisPed, brain->ThisPed);
 							You = i;
 						}
 					}
 				}
 				else
 				{
-					if (PedList[i].ThisPed != Attacker && PedList[i].Friendly != Friend && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed)
+					if (PedList[i].ThisPed != brain->ThisPed && PedList[i].Friendly != Friend && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && !PedList[i].IsPlane && !PedList[i].IsHeli)
 					{
-						if (DistanceTo(PedList[i].ThisPed, Attacker) < Dist)
+						if (DistanceTo(PedList[i].ThisPed, brain->ThisPed) < Dist)
 						{
-							Dist = DistanceTo(PedList[i].ThisPed, Attacker);
+							Dist = DistanceTo(PedList[i].ThisPed, brain->ThisPed);
 							You = i;
 						}
 					}
 				}
-			}
-		}
-	}
-	else if (inHeli)
-	{
-		for (int i = 0; i < (int)PedList.size(); i++)
-		{
-			if (MySettings.Aggression > 9)
-			{
-				if (PedList[i].ThisPed != Attacker && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && PedList[i].IsHeli)
-					You = i;
-			}
-			else
-			{
-				if (PedList[i].ThisPed != Attacker && PedList[i].Friendly != Friend && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && PedList[i].IsHeli)
-					You = i;
 			}
 		}
 
-		if (You == -1)
+		if (!Friend && MySettings.Aggression > 5 || brain->TheHacker)
 		{
-			for (int i = 0; i < (int)PedList.size(); i++)
+			if (You != -1)
 			{
-				if (MySettings.Aggression > 9)
+				if (DistanceTo(PLAYER::PLAYER_PED_ID(), brain->ThisPed) < Dist)
+					You = -2;
+			}
+			else
+				You = -2;
+		}
+
+		if (You == -2)
+			FightMe = PLAYER::PLAYER_PED_ID();
+		else if (You > -1 && You < (int)PedList.size())
+			FightMe = PedList[You].ThisPed;
+	}
+	return FightMe;
+}
+bool EnterFriendsVeh(PlayerBrain* brain)
+{
+	bool Found = false;
+	int i = 0;
+	for (; i < (int)PedList.size(); i++)
+	{ 
+		if (PedList[i].Driver && PedList[i].Follower && !PedList[i].IsAnimal)
+		{
+			if (PedList[i].ThisVeh != NULL)
+			{
+				int iSeats = FindUSeat(PedList[i].ThisVeh, false);
+				if (iSeats != -10)
 				{
-					if (PedList[i].ThisPed != Attacker && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && !PedList[i].IsPlane)
+					if (brain != nullptr)
 					{
-						if (DistanceTo(PedList[i].ThisPed, Attacker) < Dist)
-						{
-							Dist = DistanceTo(PedList[i].ThisPed, Attacker);
-							You = i;
-						}
+						PedDoGetIn(PedList[i].ThisVeh, brain);
+						brain->Passenger = true;
+						Found = true;
 					}
-				}
-				else
-				{
-					if (PedList[i].ThisPed != Attacker && PedList[i].Friendly != Friend && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && !PedList[i].IsPlane)
-					{
-						if (DistanceTo(PedList[i].ThisPed, Attacker) < Dist)
-						{
-							Dist = DistanceTo(PedList[i].ThisPed, Attacker);
-							You = i;
-						}
-					}
+					break;
 				}
 			}
 		}
 	}
+
+	return Found;
+}
+PlayerBrain* FindaPassenger(bool friends)
+{
+	int i = 0;
+	for (; i < (int)PedList.size(); i++)
+	{
+		if (friends)
+		{
+			if (!PedList[i].Passenger && !PedList[i].Driver && PedList[i].Friendly && !PedList[i].Follower && !PedList[i].IsAnimal)
+				break;
+		}
+		else
+		{
+			if (!PedList[i].Passenger && !PedList[i].Driver && !PedList[i].Friendly && !PedList[i].IsAnimal)
+				break;
+		}
+	}
+
+	if (i < (int)PedList.size())
+		return &PedList[i];
 	else
-	{
-		for (int i = 0; i < (int)PedList.size(); i++)
-		{
-			if (MySettings.Aggression > 9)
-			{
-				if (PedList[i].ThisPed != Attacker && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && !PedList[i].IsPlane && !PedList[i].IsHeli)
-				{
-					if (DistanceTo(PedList[i].ThisPed, Attacker) < Dist)
-					{
-						Dist = DistanceTo(PedList[i].ThisPed, Attacker);
-						You = i;
-					}
-				}
-			}
-			else
-			{
-				if (PedList[i].ThisPed != Attacker && PedList[i].Friendly != Friend && PedList[i].ThisPed != NULL && !PedList[i].YoDeeeed && !PedList[i].IsPlane && !PedList[i].IsHeli)
-				{
-					if (DistanceTo(PedList[i].ThisPed, Attacker) < Dist)
-					{
-						Dist = DistanceTo(PedList[i].ThisPed, Attacker);
-						You = i;
-					}
-				}
-			}
-		}
-	}
-
-	if (!Friend && MySettings.Aggression > 5)
-	{
-		if (You != -1)
-		{
-			if (DistanceTo(PLAYER::PLAYER_PED_ID(), Attacker) < Dist)
-				Fight = PLAYER::PLAYER_PED_ID();
-			else
-				Fight = PedList[You].ThisPed;
-		}
-		else
-			Fight = PLAYER::PLAYER_PED_ID();
-	}
-	else if (You != -1)
-		Fight = PedList[You].ThisPed;
-
-	return Fight;
+		return nullptr;
 }
-void PickFight(Ped Attacker, Vehicle Plane, Ped fight, int PrefVeh)
-{
-	if (fight != NULL)
-	{
-		Vector3 FIghterPos = PZSys::EntityPosition(fight);
 
-		if (PrefVeh == 3 || PrefVeh == 5)
-			FlyPlane(Attacker, Plane, FIghterPos, fight);
-		else if (PrefVeh == 2 || PrefVeh == 4)
-			FlyHeli(Attacker, Plane, FIghterPos, 45.00, 0.00);
-		else
-			DriveBye(Attacker, Plane, fight, true);
-	}
-}
 int iPasiveMode = -1;
-Ped YourKilller(Ped Victim)
+Ped YourKilller(Ped peddy)
 {
-	Entity ThisEnt = PED::_GET_PED_KILLER(Victim);
+	Entity ThisEnt = PED::_GET_PED_KILLER(peddy);
 	if (ThisEnt != NULL)
 	{
 		if ((bool)ENTITY::IS_ENTITY_A_PED(ThisEnt))
@@ -1899,25 +2013,19 @@ Ped YourKilller(Ped Victim)
 
 		}
 		else if ((bool)ENTITY::IS_ENTITY_A_VEHICLE(ThisEnt))
-		{
 			ThisEnt = VEHICLE::GET_PED_IN_VEHICLE_SEAT(ThisEnt, -1);
-		}
 		else
-		{
 			ThisEnt = NULL;
-		}
 	}
 	return ThisEnt;
 }
-int WhoShotMe(Ped MeDie)
+int WhoShotMe(Ped peddy)
 {
 	int iShoot = -1;
-	Entity Killer = YourKilller(MeDie);
+	Entity Killer = YourKilller(peddy);
 
 	if (Killer == PLAYER::PLAYER_PED_ID())
-	{
 		iShoot = -10;
-	}
 	else
 	{
 		for (int i = 0; i < (int)PedList.size(); i++)
@@ -1939,208 +2047,200 @@ int BackOffPig()
 {
 	LoggerLight("BackOffPig");
 
-	int iAm = -1;
+	int Output = -1;
 	for (int i = 0; i < (int)PedList.size(); i++)
 	{
 		if (PedList[i].PiggyBackin)
 		{
-			iAm = i;
+			Output = i;
 			break;
 		}
 	}
-	return iAm;
+	return Output;
 }
 int iFolPos;
-void OhDoKeepUp(Ped Peddy)
+void OhDoKeepUp(Ped peddy)
 {
 	LoggerLight("OhDoKeepUp");
-	AI::CLEAR_PED_TASKS(Peddy);
+	AI::CLEAR_PED_TASKS(peddy);
 
-	float fXpos = -2.50;
-	float fYpos = 1.50;
+	float Xpos = -2.50;
+	float Ypos = 1.50;
 
 	if (iFolPos == 1)
 	{
-		fXpos = -2.50;
-		fYpos = 0.00;
+		Xpos = -2.50;
+		Ypos = 0.00;
 	}
 	else if (iFolPos == 2)
 	{
-		fXpos = -2.50;
-		fYpos = -2.50;
+		Xpos = -2.50;
+		Ypos = -2.50;
 	}
 	else if (iFolPos == 3)
 	{
-		fXpos = 2.50;
-		fYpos = 0.00;
+		Xpos = 2.50;
+		Ypos = 0.00;
 	}
 	else if (iFolPos == 4)
 	{
-		fXpos = 1.50;
-		fYpos = 0.00;
+		Xpos = 1.50;
+		Ypos = 0.00;
 	}
 	else if (iFolPos == 5)
 	{
-		fXpos = -1.50;
-		fYpos = 0.00;
+		Xpos = -1.50;
+		Ypos = 0.00;
 	}
 	else if (iFolPos == 6)
 	{
-		fXpos = 2.50;
-		fYpos = -2.50;
+		Xpos = 2.50;
+		Ypos = -2.50;
 	}
 	else if (iFolPos == 7)
 	{
-		fXpos = -1.50;
-		fYpos = -2.50;
+		Xpos = -1.50;
+		Ypos = -2.50;
 		iFolPos = 0;
 	}
 
 	iFolPos++;
-	AI::TASK_FOLLOW_TO_OFFSET_OF_ENTITY(Peddy, PLAYER::PLAYER_PED_ID(), fXpos, fYpos, 0.0, 1.0, -1, 0.0, 1);
-	//PED::SET_PED_KEEP_TASK(Peddy, 1);
-	PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(Peddy, 0);
+	AI::TASK_FOLLOW_TO_OFFSET_OF_ENTITY(peddy, PLAYER::PLAYER_PED_ID(), Xpos, Ypos, 0.0f, 1.0f, -1, 0.0f, 1);
+	PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(peddy, 0);
 }
-void FolllowTheLeader(Ped Peddy)
+void FolllowTheLeader(Ped peddy)
 {
 	LoggerLight("FolllowTheLeader");
 
-	PED::REMOVE_PED_FROM_GROUP(Peddy);
+	PED::REMOVE_PED_FROM_GROUP(peddy);
 
-	RelGroupMember(Peddy, Gp_Follow);
-	PED::SET_PED_AS_GROUP_MEMBER(Peddy, FollowMe);//was as FollowMe me now as Gp_
+	RelGroupMember(peddy, Gp_Follow);
+	PED::SET_PED_AS_GROUP_MEMBER(peddy, FollowMe);//was as FollowMe me now as Gp_
 
-	if ((bool)PED::IS_PED_GROUP_MEMBER(Peddy, FollowMe))
+	if ((bool)PED::IS_PED_GROUP_MEMBER(peddy, FollowMe))
 		LoggerLight("IS_PED_GROUP_MEMBER == true");
 
-	OhDoKeepUp(Peddy);
+	OhDoKeepUp(peddy);
 }
 int NearHiest()
 {
-	int iNear = -1;
+	int Near = -1;
 	Vector3 PlayPos = PlayerPosi();
 
 	for (int i = 0; i < (int)HeistDrop.size(); i++)
 	{
 		if (DistanceTo(HeistDrop[i], PlayPos) < 55.0)
 		{
-			iNear = i;
+			Near = i;
 			break;
 		}
 	}
-	return iNear;
+	return Near;
 }
 
-void OnlineDress(Ped Pedx, ClothX* MyCloths)
+void OnlineDress(Ped peddy, ClothX* clothClass)
 {
 	LoggerLight("OnlineDress");
 
-	PED::CLEAR_ALL_PED_PROPS(Pedx);
+	PED::CLEAR_ALL_PED_PROPS(peddy);
 
-	for (int i = 0; i < MyCloths->ClothA.size(); i++)
+	if (StringContains("Bodysuit", clothClass->Title) && clothClass->ClothA.size() > 5)
+		clothClass->ClothA[1] = -10;
+
+	for (int i = 0; i < clothClass->ClothA.size(); i++)
 	{
-		if (MyCloths->ClothA[i] != -10)
-			PED::SET_PED_COMPONENT_VARIATION(Pedx, i, MyCloths->ClothA[i], MyCloths->ClothB[i], 2);
+		if (clothClass->ClothA[i] != -10)
+			PED::SET_PED_COMPONENT_VARIATION(peddy, i, clothClass->ClothA[i], clothClass->ClothB[i], 2);
 
 	}
 
-	for (int i = 0; i < MyCloths->ExtraA.size(); i++)
+	for (int i = 0; i < clothClass->ExtraA.size(); i++)
 	{
-		if (MyCloths->ExtraA[i] != -10)
-			PED::SET_PED_PROP_INDEX(Pedx, i, MyCloths->ExtraA[i], MyCloths->ExtraB[i], false);
+		if (clothClass->ExtraA[i] != -10)
+			PED::SET_PED_PROP_INDEX(peddy, i, clothClass->ExtraA[i], clothClass->ExtraB[i], false);
 	}
 }
-void OnlineFaces(Ped Pedx, ClothBank* pFixtures)
+void OnlineFaces(Ped peddy, ClothBank* clothBankClass)
 {
 	LoggerLight("OnlineFaces");
 	//****************FaceShape/Colour****************
-	PED::SET_PED_HEAD_BLEND_DATA(Pedx, pFixtures->MyFaces.ShapeFirstID, pFixtures->MyFaces.ShapeSecondID, pFixtures->MyFaces.ShapeThirdID, pFixtures->MyFaces.SkinFirstID, pFixtures->MyFaces.SkinSecondID, pFixtures->MyFaces.SkinThirdID, pFixtures->MyFaces.ShapeMix, pFixtures->MyFaces.SkinMix, pFixtures->MyFaces.ThirdMix, 0);
+	PED::SET_PED_HEAD_BLEND_DATA(peddy, clothBankClass->MyFaces.ShapeFirstID, clothBankClass->MyFaces.ShapeSecondID, clothBankClass->MyFaces.ShapeThirdID, clothBankClass->MyFaces.SkinFirstID, clothBankClass->MyFaces.SkinSecondID, clothBankClass->MyFaces.SkinThirdID, clothBankClass->MyFaces.ShapeMix, clothBankClass->MyFaces.SkinMix, clothBankClass->MyFaces.ThirdMix, 0);
 
 	if (ItsChristmas)
 	{
-		if (pFixtures->Male)
+		if (clothBankClass->Male)
 		{
-			PZclass::ClothX Outfit = XmasOut_M[LessRandomInt("Crimb01", 0, (int)XmasOut_M.size() - 1)];
-			OnlineDress(Pedx, &Outfit);
+			ClothX Outfit = XmasOut_M[LessRandomInt("Crimb01", 0, (int)XmasOut_M.size() - 1)];
+			OnlineDress(peddy, &Outfit);
 		}
 		else
 		{
-			PZclass::ClothX Outfit = XmasOut_F[LessRandomInt("Crimb01", 0, (int)XmasOut_F.size() - 1)];
-			OnlineDress(Pedx, &Outfit);
+			ClothX Outfit = XmasOut_F[LessRandomInt("Crimb01", 0, (int)XmasOut_F.size() - 1)];
+			OnlineDress(peddy, &Outfit);
 		}
 	}
 	else if (ItHalloween)
 	{
-		if (pFixtures->Male)
+		if (clothBankClass->Male)
 		{
 			int iRan = LessRandomInt("Hallow01", 0, 11);
-			PZclass::ClothX Outfit = PZclass::ClothX("MaleArena WarSpace_Horror", { 0, 141, 0, 164, 108, 0, 33, 0, 15, 0, 0, 277 }, { 0, iRan, 0, iRan, iRan, 0, 0, 0, 0, 0, 0, iRan }, { -1, -1, -1, -1, -1 }, { -1, -1, -1, -1, -1 });
-			OnlineDress(Pedx, &Outfit);
+			ClothX Outfit = ClothX("MaleArena WarSpace_Horror", { 0, 141, 0, 164, 108, 0, 33, 0, 15, 0, 0, 277 }, { 0, iRan, 0, iRan, iRan, 0, 0, 0, 0, 0, 0, iRan }, { -1, -1, -1, -1, -1 }, { -1, -1, -1, -1, -1 });
+			OnlineDress(peddy, &Outfit);
 		}
 		else
 		{
 			int iRan = LessRandomInt("Hallow01", 0, 11);
-			PZclass::ClothX Outfit = PZclass::ClothX("FemaleArena WarSpace_Horror", { 21, 141, 0, 205, 115, 0, 34, 0, 6, 0, 0, 290 }, { 0, iRan, 0, iRan, iRan, 0, 0, 0, 0, 0, 0, iRan }, { -1, -1, -1, -1, -1 }, { -1, -1, -1, -1, -1 });
-			OnlineDress(Pedx, &Outfit);
+			ClothX Outfit = ClothX("FemaleArena WarSpace_Horror", { 21, 141, 0, 205, 115, 0, 34, 0, 6, 0, 0, 290 }, { 0, iRan, 0, iRan, iRan, 0, 0, 0, 0, 0, 0, iRan }, { -1, -1, -1, -1, -1 }, { -1, -1, -1, -1, -1 });
+			OnlineDress(peddy, &Outfit);
 		}
 	}
 	else
-		OnlineDress(Pedx, &pFixtures->Cothing);
+		OnlineDress(peddy, &clothBankClass->Cothing);
 
-	PED::SET_PED_COMPONENT_VARIATION(Pedx, 2, pFixtures->MyHair.Comp, pFixtures->MyHair.Text, 2);
+	PED::SET_PED_COMPONENT_VARIATION(peddy, 2, clothBankClass->MyHair.Comp, clothBankClass->MyHair.Text, 2);
 
-	if (pFixtures->MyHair.Over != -1)
-		PED::_APPLY_PED_OVERLAY(Pedx, pFixtures->MyHair.OverLib, pFixtures->MyHair.Over);
-	PED::_SET_PED_HAIR_COLOR(Pedx, pFixtures->HairColour, pFixtures->HairStreaks);
+	if (clothBankClass->MyHair.Over != -1)
+		PED::_APPLY_PED_OVERLAY(peddy, clothBankClass->MyHair.OverLib, clothBankClass->MyHair.Over);
+	PED::_SET_PED_HAIR_COLOR(peddy, clothBankClass->HairColour, clothBankClass->HairStreaks);
 
 	//****************Face****************
-	for (int i = 0; i < pFixtures->MyOverlay.size(); i++)
+	for (int i = 0; i < clothBankClass->MyOverlay.size(); i++)
 	{
-		int iColour = 0;
+		int Colour = 0;
 
 		if (i == 1)
-		{
-			iColour = 1;
-		}//Facial Hair
+			Colour = 1; //Facial Hair
 		else if (i == 2)
-		{
-			iColour = 1;
-		}//Eyebrows
+			Colour = 1; //Eyebrows
 		else if (i == 5)
-		{
-			iColour = 2;
-		}//Blush
+			Colour = 2; //Blush
 		else if (i == 8)
-		{
-			iColour = 2;
-		}//Lipstick
+			Colour = 2; //Lipstick
 		else if (i == 10)
-		{
-			iColour = 1;
-		}//Chest Hair
+			Colour = 1; //Chest Hair
 
-		int iChange = pFixtures->MyOverlay[i].Overlay;
-		int AddColour = pFixtures->MyOverlay[i].OverCol;
-		float fVar = pFixtures->MyOverlay[i].OverOpc;
+		int Change = clothBankClass->MyOverlay[i].Overlay;
+		int AddColour = clothBankClass->MyOverlay[i].OverCol;
+		float Opc = clothBankClass->MyOverlay[i].OverOpc;
 
-		PED::SET_PED_HEAD_OVERLAY(Pedx, i, iChange, fVar);
+		PED::SET_PED_HEAD_OVERLAY(peddy, i, Change, Opc);
 
-		if (iColour > 0)
-			PED::_SET_PED_HEAD_OVERLAY_COLOR(Pedx, i, iColour, AddColour, 0);
+		if (Colour > 0)
+			PED::_SET_PED_HEAD_OVERLAY_COLOR(peddy, i, Colour, AddColour, 0);
 	}
 	//****************Tattoos****************
-	for (int i = 0; i < pFixtures->MyTattoo.size(); i++)
-		PED::_APPLY_PED_OVERLAY(Pedx, MyHashKey(pFixtures->MyTattoo[i].BaseName), MyHashKey(pFixtures->MyTattoo[i].TatName));
+	for (int i = 0; i < clothBankClass->MyTattoo.size(); i++)
+		PED::_APPLY_PED_OVERLAY(peddy, MyHashKey(clothBankClass->MyTattoo[i].BaseName), MyHashKey(clothBankClass->MyTattoo[i].TatName));
 }
 
-void MaxOutAllModsNoWheels(Vehicle Vehic, int cT)
+void MaxOutAllModsNoWheels(Vehicle vic, int modItem)
 {
 	LoggerLight("MaxOutAllModsNoWheels");
 
-	VEHICLE::SET_VEHICLE_MOD_KIT(Vehic, 0);
+	VEHICLE::SET_VEHICLE_MOD_KIT(vic, 0);
 	for (int i = 0; i < 50; i++)
 	{
-		int iSpoilher = VEHICLE::GET_NUM_VEHICLE_MODS(Vehic, i);
+		int Spoilher = VEHICLE::GET_NUM_VEHICLE_MODS(vic, i);
 
 		if (i == 18 || i == 22 || i == 23 || i == 24)
 		{
@@ -2148,88 +2248,76 @@ void MaxOutAllModsNoWheels(Vehicle Vehic, int cT)
 		}
 		else
 		{
-			iSpoilher -= 1;
-			VEHICLE::SET_VEHICLE_MOD(Vehic, i, iSpoilher, true);
+			Spoilher -= 1;
+			VEHICLE::SET_VEHICLE_MOD(vic, i, Spoilher, true);
 		}
 	}
 
-	if (cT != 13 && cT != 14 && cT != 15 && cT != 16)
+	if (modItem != 13 && modItem != 14 && modItem != 15 && modItem != 16)
 	{
-		VEHICLE::TOGGLE_VEHICLE_MOD(Vehic, 18, true);
-		VEHICLE::TOGGLE_VEHICLE_MOD(Vehic, 22, true);
+		VEHICLE::TOGGLE_VEHICLE_MOD(vic, 18, true);
+		VEHICLE::TOGGLE_VEHICLE_MOD(vic, 22, true);
 	}
-	else if (cT == 15 || cT == 16)
-		VEHICLE::_SET_VEHICLE_LANDING_GEAR(Vehic, 3);
+	else if (modItem == 15 || modItem == 16)
+		VEHICLE::_SET_VEHICLE_LANDING_GEAR(vic, 3);
 }
-void MakeModsNotWar(Vehicle Vehic, vector<int> MyMods)
+void MakeModsNotWar(Vehicle vic, std::vector<int>& modItems)
 {
 	LoggerLight("MakeModsNotWar");
 
-	VEHICLE::SET_VEHICLE_MOD_KIT(Vehic, 0);
+	VEHICLE::SET_VEHICLE_MOD_KIT(vic, 0);
 
-	for (int i = 0; i < MyMods.size(); i++)
+	for (int i = 0; i < modItems.size(); i++)
 	{
-		if (MyMods[i] == -10)
+		if (modItems[i] == -10)
 		{
 
 		}
 		else if (i == 48)
 		{
-			int iSpoilher = -1;
-			if (MyMods[i] == -1)
+			int Spoilher = -1;
+			if (modItems[i] == -1)
 			{
-				iSpoilher = VEHICLE::GET_NUM_VEHICLE_MODS(Vehic, i) - 1;
-				if (iSpoilher < 1)
-					iSpoilher = VEHICLE::GET_VEHICLE_LIVERY_COUNT(Vehic) - 1;
+				Spoilher = VEHICLE::GET_NUM_VEHICLE_MODS(vic, i) - 1;
+				if (Spoilher < 1)
+					Spoilher = VEHICLE::GET_VEHICLE_LIVERY_COUNT(vic) - 1;
 
-				if (iSpoilher > 0)
-				{
-					MyMods[i] = RandomInt(0, iSpoilher);
-				}
+				if (Spoilher > 0)
+					modItems[i] = RandomInt(0, Spoilher);
 			}
 
-			if (iSpoilher > -1 || MyMods[i] > -1)
+			if (Spoilher > -1 || modItems[i] > -1)
 			{
-				VEHICLE::SET_VEHICLE_LIVERY(Vehic, MyMods[i]);
-				VEHICLE::SET_VEHICLE_MOD(Vehic, i, MyMods[i], true);
+				VEHICLE::SET_VEHICLE_LIVERY(vic, modItems[i]);
+				VEHICLE::SET_VEHICLE_MOD(vic, i, modItems[i], true);
 			}
 		}
 		else if (i == 66)
 		{
-			if (MyMods[i] == -1)
-			{
-				int iCheckHere = RandomInt(0, 159);
-				MyMods[i] = iCheckHere;
-			}
+			if (modItems[i] == -1)
+				modItems[i] = RandomInt(0, 159);
 		}
 		else if (i == 67)
 		{
-			if (MyMods[i] == -1)
-			{
-				int iCheckHere = RandomInt(0, 159);
-				VEHICLE::SET_VEHICLE_COLOURS(Vehic, MyMods[i - 1], iCheckHere);
-			}
+			if (modItems[i] == -1)
+				VEHICLE::SET_VEHICLE_COLOURS(vic, modItems[i - 1], RandomInt(0, 159));
 			else
-			{
-				VEHICLE::SET_VEHICLE_COLOURS(Vehic, MyMods[i - 1], MyMods[i]);
-			}
+				VEHICLE::SET_VEHICLE_COLOURS(vic, modItems[i - 1], modItems[i]);
 		}
-		else if (MyMods[i] == -1)
+		else if (modItems[i] == -1)
 		{
-			int iSpoilher = VEHICLE::GET_NUM_VEHICLE_MODS(Vehic, i) - 1;
-			if (iSpoilher > 0)
+			int Spoilher = VEHICLE::GET_NUM_VEHICLE_MODS(vic, i) - 1;
+			if (Spoilher > 0)
 			{
-				int iCheckHere = RandomInt(0, iSpoilher);
-				VEHICLE::SET_VEHICLE_MOD(Vehic, i, iCheckHere, true);
+				int CheckHere = RandomInt(0, Spoilher);
+				VEHICLE::SET_VEHICLE_MOD(vic, i, CheckHere, true);
 			}
 		}
 		else
-		{
-			VEHICLE::SET_VEHICLE_MOD(Vehic, i, MyMods[i], true);
-		}
+			VEHICLE::SET_VEHICLE_MOD(vic, i, modItems[i], true);
 	}
 }
-Vehicle OppresiveDump(Vector4 VecLocal)
+Vehicle OppresiveDump(Vector4 pos)
 {
 	Vehicle BuildVehicle = NULL;
 	int iVehHash = MyHashKey("oppressor2");
@@ -2240,7 +2328,7 @@ Vehicle OppresiveDump(Vector4 VecLocal)
 		while (!(bool)STREAMING::HAS_MODEL_LOADED(iVehHash))
 			WAIT(1);
 
-		BuildVehicle = VEHICLE::CREATE_VEHICLE(iVehHash, VecLocal.X, VecLocal.Y, VecLocal.Z, VecLocal.R, true, true);
+		BuildVehicle = VEHICLE::CREATE_VEHICLE(iVehHash, pos.X, pos.Y, pos.Z, pos.R, true, true);
 		MaxOutAllModsNoWheels(BuildVehicle, 15);
 
 		ENTITY::SET_ENTITY_AS_MISSION_ENTITY(BuildVehicle, 1, 1);
@@ -2248,197 +2336,224 @@ Vehicle OppresiveDump(Vector4 VecLocal)
 
 	return BuildVehicle;
 }
-Ped PlayerPedGen(Vector4 vLocal, PlayerBrain* thisBrain)
-{
-	LoggerLight("PlayerPedGen = " + thisBrain->MyName);
 
-	Ped thisPed = NULL;
+inline const std::vector<std::string> AnimalFarm = {
+	"a_c_boar",//"a_c_boar",		0
+	"a_c_husky",//					2
+	"a_c_poodle",//					3
+	"a_c_pug",//					4
+	"a_c_retriever",//				5
+	"a_c_rottweiler",//				6
+	"a_c_shepherd",//				7
+	"a_c_westy",//					8
+	"a_c_rat",//"a_c_rat" />		10
+	"a_c_cow",//"a_c_cow" />		11
+	"a_c_coyote",//"a_c_coyote" />	12
+	"a_c_crow",//"a_c_crow" />		13
+	"a_c_rabbit_01",//"a_c_rabbit_01" />14
+	"a_c_deer",//"a_c_deer" />			15
+	"a_c_hen",//"a_c_hen" />		16
+	"a_c_mtlion",//"mountain lion" />17
+	"a_c_pig",//"a_c_pig" />		18
+};
+Ped PlayerPedGen(Vector4 pos, PlayerBrain* brain, bool partyPed)
+{
+	LoggerLight("PlayerPedGen = " + brain->MyName);
+
+	Ped ThisPed = NULL;
 
 	WAIT(100);
-	Hash model = MyHashKey(thisBrain->PFMySetting.Model);
-	STREAMING::REQUEST_MODEL(model);// Check if the model is valid
 
-	if ((bool)STREAMING::IS_MODEL_IN_CDIMAGE(model) && (bool)STREAMING::IS_MODEL_VALID(model))
+	Hash MyModel = MyHashKey(brain->PFMySetting.Model);
+
+	if (HackAttacks && !brain->TheHacker && !brain->Driver && !brain->Passenger && LessRandomInt("AnimalChance", 1, 10) < 5)
 	{
-		while (!STREAMING::HAS_MODEL_LOADED(model))
+		brain->IsAnimal = true;
+		MyModel = MyHashKey(AnimalFarm[RandomInt(0, (int)AnimalFarm.size() - 1)]);
+	}
+	else if (brain->TheHacker)
+		brain->IsAnimal = true;
+
+	STREAMING::REQUEST_MODEL(MyModel);// Check if the model is valid
+
+	if ((bool)STREAMING::IS_MODEL_IN_CDIMAGE(MyModel) && (bool)STREAMING::IS_MODEL_VALID(MyModel))
+	{
+		while (!STREAMING::HAS_MODEL_LOADED(MyModel))
 			WAIT(10);
 
-		thisPed = PED::CREATE_PED(4, model, vLocal.X, vLocal.Y, vLocal.Z, vLocal.R, true, false);
-		STREAMING::SET_MODEL_AS_NO_LONGER_NEEDED(model);
+		ThisPed = PED::CREATE_PED(4, MyModel, pos.X, pos.Y, pos.Z, pos.R, true, false);
+		STREAMING::SET_MODEL_AS_NO_LONGER_NEEDED(MyModel);
 
-		if ((bool)ENTITY::DOES_ENTITY_EXIST(thisPed))
+		if ((bool)ENTITY::DOES_ENTITY_EXIST(ThisPed))
 		{
-			ENTITY::SET_ENTITY_AS_MISSION_ENTITY(thisPed, 1, 1);
+			ENTITY::SET_ENTITY_AS_MISSION_ENTITY(ThisPed, 1, 1);
 
 			if (MySettings.Aggression > 5)
-				PED::SET_PED_ACCURACY(thisPed, MySettings.AccMax);
+				PED::SET_PED_ACCURACY(ThisPed, MySettings.AccMax);
 			else
-				PED::SET_PED_ACCURACY(thisPed, MySettings.AccMin);
+				PED::SET_PED_ACCURACY(ThisPed, MySettings.AccMin);
 
 			int iHeal = RandomInt(200, 300);
-			PED::SET_PED_MAX_HEALTH(thisPed, iHeal);
-			ENTITY::SET_ENTITY_HEALTH(thisPed, iHeal);
-			thisBrain->HeadTag = UI::_CREATE_HEAD_DISPLAY(thisPed, (LPSTR)thisBrain->MyName.c_str(), false, false, "", 1);//
-			UI::_0xEE76FF7E6A0166B0(thisBrain->HeadTag, true);
-			UI::_0xA67F9C46D612B6F1(thisBrain->HeadTag, true);
+			PED::SET_PED_MAX_HEALTH(ThisPed, iHeal);
+			ENTITY::SET_ENTITY_HEALTH(ThisPed, iHeal);
+			brain->HeadTag = UI::_CREATE_HEAD_DISPLAY(ThisPed, (LPSTR)brain->MyName.c_str(), false, false, "", 1);//
+			UI::_SET_HEAD_DISPLAY_FLAG(brain->HeadTag, 0, true);
+			//UI::_0xEE76FF7E6A0166B0(brain->HeadTag, true);
+			//UI::_0xA67F9C46D612B6F1(brain->HeadTag, true);
 
 			if (MySettings.Aggression > 1)
-				PED::SET_PED_COMBAT_ABILITY(thisPed, 150);
+				PED::SET_PED_COMBAT_ABILITY(ThisPed, 150);
 			else
-				PED::SET_PED_COMBAT_ABILITY(thisPed, 10);
+				PED::SET_PED_COMBAT_ABILITY(ThisPed, 10);
 
-			if (!thisBrain->Driver)
+			if (!brain->Driver)
 			{
-				PED::SET_PED_COMBAT_MOVEMENT(thisPed, 2);
-				AI::SET_PED_PATH_CAN_USE_CLIMBOVERS(thisPed, true);
-				AI::SET_PED_PATH_CAN_USE_LADDERS(thisPed, true);
-				AI::SET_PED_PATH_CAN_DROP_FROM_HEIGHT(thisPed, true);
-				AI::SET_PED_PATH_PREFER_TO_AVOID_WATER(thisPed, false);
-				PED::SET_PED_COMBAT_ATTRIBUTES(thisPed, 0, true);
-				PED::SET_PED_COMBAT_ATTRIBUTES(thisPed, 1, true);
-				PED::SET_PED_COMBAT_ATTRIBUTES(thisPed, 3, true);
-				PED::SET_PED_COMBAT_ATTRIBUTES(thisPed, 5, true);
+				PED::SET_PED_COMBAT_MOVEMENT(ThisPed, 2);
+				AI::SET_PED_PATH_CAN_USE_CLIMBOVERS(ThisPed, true);
+				AI::SET_PED_PATH_CAN_USE_LADDERS(ThisPed, true);
+				AI::SET_PED_PATH_CAN_DROP_FROM_HEIGHT(ThisPed, true);
+				AI::SET_PED_PATH_PREFER_TO_AVOID_WATER(ThisPed, false);
+				PED::SET_PED_COMBAT_ATTRIBUTES(ThisPed, 0, true);
+				PED::SET_PED_COMBAT_ATTRIBUTES(ThisPed, 1, true);
+				PED::SET_PED_COMBAT_ATTRIBUTES(ThisPed, 3, true);
+				PED::SET_PED_COMBAT_ATTRIBUTES(ThisPed, 5, true);
 
 				if (MySettings.Aggression > 1)
 				{
-					PED::SET_PED_COMBAT_ATTRIBUTES(thisPed, 46, true);
-					PED::SET_PED_COMBAT_ATTRIBUTES(thisPed, 2, true);
+					PED::SET_PED_COMBAT_ATTRIBUTES(ThisPed, 46, true);
+					PED::SET_PED_COMBAT_ATTRIBUTES(ThisPed, 2, true);
 					if (MySettings.Aggression > 2)
-						PED::SET_PED_CAN_SWITCH_WEAPON(thisPed, true);
+						PED::SET_PED_CAN_SWITCH_WEAPON(ThisPed, true);
 				}
 			}
-			
-			thisBrain->ThisPed = thisPed;
 
-			OnlineFaces(thisPed, &thisBrain->PFMySetting);
+			brain->ThisPed = ThisPed;
 
-			GunningIt(thisPed, thisBrain->GunSelect);
+			if (partyPed)
+				brain->AtTheParty = true;
 
-			if (thisBrain->MyIdentity == "")
+			if (!brain->IsAnimal)
 			{
-				thisBrain->TimeOn = InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession);
-				thisBrain->Level = UniqueLevels();
-				thisBrain->MyIdentity = thisBrain->MyName + std::to_string(thisBrain->Level);
+				OnlineFaces(ThisPed, &brain->PFMySetting);
+				GunningIt(ThisPed, brain->GunSelect);
 			}
 
-			if (thisBrain->Follower)
+			if (brain->MyIdentity == "")
 			{
-				thisBrain->Friendly = true;
-				if (!thisBrain->Driver && !thisBrain->Passenger)
-					FolllowTheLeader(thisPed);
+				int PZSetMinSession = (MySettings.MinSession * 60) * 1000;
+				int PZSetMaxSession = (MySettings.MaxSession * 60) * 1000;
+
+				brain->TimeOn = InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession);
+				brain->Level = UniqueLevels();
+				brain->MyIdentity = brain->MyName + std::to_string(brain->Level);
+			}
+
+			if (!brain->AtTheParty)
+			{
+				if (brain->Follower)
+				{
+					brain->Friendly = true;
+					if (!brain->Driver && !brain->Passenger)
+						FolllowTheLeader(ThisPed);
+					else
+						RelGroupMember(ThisPed, Gp_Follow);
+				}
+				else if (brain->Friendly)
+				{
+					RelGroupMember(ThisPed, Gp_Friend);
+					//if (!brain->Driver || !brain->Passenger)
+					//	WalkHere(ThisPed, FindingShops(ThisPed));
+				}
+				else if (brain->TheHacker)
+					RelGroupMember(brain->ThisPed, GP_Mental);
 				else
-					RelGroupMember(thisPed, Gp_Follow);
-			}
-			else if (thisBrain->Friendly)
-			{
-				RelGroupMember(thisPed, Gp_Friend);
-				//if (!thisBrain->Driver || !thisBrain->Passenger)
-				//	WalkHere(thisPed, FindingShops(thisPed));
-			}
-			else
-				FightPlayer(thisBrain);
+					FightPlayer(brain);
 
-			
-			if (thisBrain->Oppressor != NULL)
-			{
-				PED::SET_PED_ACCURACY(thisPed, 100);
-				thisBrain->DirBlip = false;
-				thisBrain->ThisBlip = PedBlimp(NULL, thisPed, 639, thisBrain->MyName, thisBrain->BlipColour, false);
+				if (brain->Oppressor != NULL)
+				{
+					PED::SET_PED_ACCURACY(ThisPed, 100);
+					brain->DirBlip = false;
+					PedBlimp(&brain->ThisBlip, ThisPed, 639, brain->MyName, brain->BlipColour, false);
+				}
+				else if (brain->Driver)
+				{
+					float fAggi = (float)MySettings.Aggression / 100;
+					PED::SET_DRIVER_ABILITY(ThisPed, 1.00f);
+					PED::SET_DRIVER_AGGRESSIVENESS(ThisPed, fAggi);
+					PED::SET_PED_STEERS_AROUND_VEHICLES(ThisPed, true);
+					brain->DirBlip = true;
+				}
+				else if (brain->Passenger)
+					brain->DirBlip = true;
+				else
+					brain->DirBlip = false;
 			}
-			else if (thisBrain->Driver)
-			{
-				float fAggi = (float)MySettings.Aggression / 100;
-				PED::SET_DRIVER_ABILITY(thisPed, 1.00f);
-				PED::SET_DRIVER_AGGRESSIVENESS(thisPed, fAggi);
-				PED::SET_PED_STEERS_AROUND_VEHICLES(thisPed, true);
-				thisBrain->DirBlip = true;
-			}
-			else if (thisBrain->Passenger)
-				thisBrain->DirBlip = true;
-			else
-				thisBrain->DirBlip = false;
 
-
-			if (thisBrain->IsPlane)
+			if (brain->TheHacker)
 			{
-				if (thisBrain->ThisVeh != NULL)
-					ENTITY::FREEZE_ENTITY_POSITION(thisBrain->ThisVeh, false);
+				ENTITY::SET_ENTITY_INVINCIBLE(brain->ThisPed, true);
+				PED::SET_PED_COMPONENT_VARIATION(brain->ThisPed, 0, 0, 1, 2);
 
 			}
+			else if (MySettings.PassiveMode)
+				ENTITY::SET_ENTITY_ALPHA(brain->ThisPed, 120, false);
 		}
 		else
-			thisPed = NULL;
+			ThisPed = NULL;
 	}
 	else
-		thisPed = NULL;
+		ThisPed = NULL;
 
-	return thisPed;
+	return ThisPed;
 }
 
-Hash RandVeh(int iVechList)
+std::string RandVeh(int vicList)
 {
-	LoggerLight("RandVeh, iVechList == " + std::to_string(iVechList));
+	LoggerLight("RandVeh, vicList == " + std::to_string(vicList));
 
-	Hash sVeh = 0;
+	std::string sVeh = "";
 
-	if (iVechList == 1)
-	{
-		if (AddnVeh.size() > 0)
-			sVeh = AddnVeh[LessRandomInt("RandVeh01", 0, (int)AddnVeh.size() - 1)];
-		else
-			sVeh = MyHashKey(PreVeh_01[LessRandomInt("RandVeh01", 0, (int)PreVeh_01.size() - 1)]);
-	}
-	else if (iVechList == 2)
-		sVeh = MyHashKey(PreVeh_02[LessRandomInt("RandVeh02", 0, (int)PreVeh_02.size() - 1)]);
-	else if (iVechList == 3)
-		sVeh = MyHashKey(PreVeh_03[LessRandomInt("RandVeh03", 0, (int)PreVeh_03.size() - 1)]);
-	else if (iVechList == 4)
-		sVeh = MyHashKey(PreVeh_04[LessRandomInt("RandVeh04", 0, (int)PreVeh_04.size() - 1)]);
-	else if (iVechList == 5)
-		sVeh = MyHashKey(PreVeh_05[LessRandomInt("RandVeh05", 0, (int)PreVeh_05.size() - 1)]);
-	else if (iVechList == 6)
-		sVeh = MyHashKey(PreVeh_06[LessRandomInt("RandVeh06", 0, (int)PreVeh_06.size() - 1)]);
-	else if (iVechList == 7)
-		sVeh = MyHashKey(PreVeh_07[LessRandomInt("RandVeh07", 0, (int)PreVeh_07.size() - 1)]);
-	else if (iVechList == 8 || iVechList == 999)
-		sVeh = MyHashKey("HYDRA");
-	else if (iVechList == 9)
-		sVeh = MyHashKey("oppressor2");
-	else if (iVechList == 15)
-		sVeh = MyHashKey("police5");
+	if (vicList == 1)
+		sVeh = PreVeh_01[LessRandomInt("RandVeh01", 0, (int)PreVeh_01.size() - 1)];		// Carz
+	else if (vicList == 2)
+		sVeh = PreVeh_02[LessRandomInt("RandVeh02", 0, (int)PreVeh_02.size() - 1)];		// CiviHeli
+	else if (vicList == 3)
+		sVeh = PreVeh_03[LessRandomInt("RandVeh03", 0, (int)PreVeh_03.size() - 1)];		// CivPlane
+	else if (vicList == 4)
+		sVeh = PreVeh_04[LessRandomInt("RandVeh04", 0, (int)PreVeh_04.size() - 1)];		// MilHeli
+	else if (vicList == 5)
+		sVeh = PreVeh_05[LessRandomInt("RandVeh05", 0, (int)PreVeh_05.size() - 1)];		// MilPlane
+	else if (vicList == 6)
+		sVeh = PreVeh_06[LessRandomInt("RandVeh06", 0, (int)PreVeh_06.size() - 1)];		// MilCar
+	else if (vicList == 7)
+		sVeh = PreVeh_07[LessRandomInt("RandVeh07", 0, (int)PreVeh_07.size() - 1)];
+	else if (vicList == 8 || vicList == 999)
+		sVeh = "HYDRA";
+	else if (vicList == 9)
+		sVeh = "oppressor2";
 	else
-		sVeh = MyHashKey("ZENTORNO");
+		sVeh = "ZENTORNO";
 
 	return sVeh;
 }
-bool IsItARealVehicle(Hash vehName)
+bool IsItARealVehicle(Hash vehHash)
 {
 	LoggerLight("IsItARealVehicle");
 
 	bool bIsReal = false;
-	if ((bool)STREAMING::IS_MODEL_A_VEHICLE(vehName))
+	if ((bool)STREAMING::IS_MODEL_A_VEHICLE(vehHash))
 		bIsReal = true;
 
 	return bIsReal;
 }
-bool HasASeat(Vehicle vMe)
-{
-	bool bIn = false;
-	if (vMe != NULL)
-	{
-		if (FindUSeat(vMe) > -1)
-			bIn = true;
-	}
-	return bIn;
-}
 
-Vehicle SpawnVehicleProp(Vector3 VecLocal)
+Vehicle SpawnVehicleProp(Vector3 pos)
 {
 	Vehicle BuildVehicle = NULL;
 
 	LoggerLight("SpawnVehicle");
 
-	Hash VehModel = RandVeh(7);
+	Hash VehModel = MyHashKey(RandVeh(7));
 
 	if (!IsItARealVehicle(VehModel))
 		VehModel = MyHashKey("MAMBA");
@@ -2449,7 +2564,7 @@ Vehicle SpawnVehicleProp(Vector3 VecLocal)
 		while (!(bool)STREAMING::HAS_MODEL_LOADED(VehModel))
 			WAIT(1);
 
-		BuildVehicle = VEHICLE::CREATE_VEHICLE(VehModel, VecLocal.x, VecLocal.y, VecLocal.z, 0.0, true, true);
+		BuildVehicle = VEHICLE::CREATE_VEHICLE(VehModel, pos.x, pos.y, pos.z, 0.0, true, true);
 
 		ENTITY::APPLY_FORCE_TO_ENTITY(BuildVehicle, 1, 0, 0, 1, 0, 0, 1, 1, false, true, true, false, true);
 
@@ -2457,122 +2572,150 @@ Vehicle SpawnVehicleProp(Vector3 VecLocal)
 	}
 	return BuildVehicle;
 }
-Vehicle SpawnVehicle(int iVehList, Vector4 VecLocal, bool bAddPlayer, PlayerBrain* myBrains, bool bAsProp, bool bCanFill)
+Vehicle SpawnVehicle(PlayerBrain* brain, bool newPlayer, bool canFill)
 {
 	LoggerLight("SpawnVehicle");
 
 	Vehicle BuildVehicle = NULL;
-	WAIT(100);
-
-	Hash VehModel = RandVeh(iVehList);
-
-	if (!IsItARealVehicle(VehModel))
-		VehModel = MyHashKey("MAMBA");
-
-	if ((bool)STREAMING::IS_MODEL_IN_CDIMAGE(VehModel) && (bool)STREAMING::IS_MODEL_A_VEHICLE(VehModel))
+	if (brain != nullptr)
 	{
-		STREAMING::REQUEST_MODEL(VehModel);
-		while (!(bool)STREAMING::HAS_MODEL_LOADED(VehModel))
-			WAIT(1);
-
-		BuildVehicle = VEHICLE::CREATE_VEHICLE(VehModel, VecLocal.X, VecLocal.Y, VecLocal.Z, VecLocal.R, true, true);
-
-		int iClass = VEHICLE::GET_VEHICLE_CLASS(BuildVehicle);
-		if (iClass == 15 || iClass == 16)
-			MaxOutAllModsNoWheels(BuildVehicle, iClass);
+		Hash VehModel;
+		WAIT(100);
+		if (brain->PrefredVehicle < 7)
+		{
+			if (brain->FaveVehicle == "")
+				VehModel = MyHashKey(RandVeh(brain->PrefredVehicle));
+			else
+				VehModel = MyHashKey(brain->FaveVehicle);
+		}
 		else
-			MakeModsNotWar(BuildVehicle, RandVehModsist());
+			VehModel = MyHashKey(RandVeh(brain->PrefredVehicle));
 
+		if (!IsItARealVehicle(VehModel))
+			VehModel = MyHashKey("MAMBA");
 
+		Vector4 VecLocal = FindVehSpPoint(brain->PrefredVehicle);
 
-		ENTITY::SET_ENTITY_AS_MISSION_ENTITY(BuildVehicle, 1, 1);
-
-		myBrains->ThisVeh = BuildVehicle;
-		myBrains->Driver = true;
-		myBrains->FindPlayer = 0;
-
-		if (!HasASeat(BuildVehicle))
-			myBrains->ApprochPlayer = false;
-
-		if (iVehList == 8)
+		if ((bool)STREAMING::IS_MODEL_IN_CDIMAGE(VehModel) && (bool)STREAMING::IS_MODEL_A_VEHICLE(VehModel))
 		{
-			myBrains->IsPlane = true;
-			Vector3 MyPos = ENTITY::GET_ENTITY_COORDS(BuildVehicle, true);
-			MyPos.z = 550.00;
-			myBrains->Oppressor = OppresiveDump(Vector4(MyPos.x, MyPos.y, MyPos.z, 0.0));
-			ENTITY::ATTACH_ENTITY_TO_ENTITY(myBrains->Oppressor, BuildVehicle, PED::GET_PED_BONE_INDEX(BuildVehicle, 0), 0.00, 3.32999945, -0.10, 0.00, 0.00, 0.00, false, false, false, false, 2, true);
-			ENTITY::SET_ENTITY_ALPHA(BuildVehicle, 0, 0);
-			MoveEntity(BuildVehicle, MyPos);
-		}
-		else if (myBrains->Friendly && IsItThePlane(1, BuildVehicle))
-		{
-			myBrains->PlaneLand = 10;
-			myBrains->AirTranspport = true;
-			myBrains->ApprochPlayer = false;
-			bPlanePort = true;
-			bCanFill = false;
-		}
+			STREAMING::REQUEST_MODEL(VehModel);
+			while (!(bool)STREAMING::HAS_MODEL_LOADED(VehModel))
+				WAIT(1);
 
-		if (bAddPlayer)
-		{
-			myBrains->ThisPed = PlayerPedGen(VecLocal, myBrains);
-			WarptoAnyVeh(BuildVehicle, myBrains->ThisPed, -1);
-			GunningIt(myBrains->ThisPed, 6);
-			PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(myBrains->ThisPed, 1);
+			BuildVehicle = VEHICLE::CREATE_VEHICLE(VehModel, VecLocal.X, VecLocal.Y, VecLocal.Z, VecLocal.R, true, true);
 
-			VEHICLE::SET_VEHICLE_ENGINE_ON(BuildVehicle, 1, 1, 0);
-			int iSpare = -1;
-			if (!myBrains->Friendly)
-				iSpare = 0;
-			int iSeating = VEHICLE::GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(BuildVehicle);
-			if (bCanFill && PlayerZinSesh(true) + iSeating + iSpare < MySettings.MaxPlayers)
+			ENTITY::FREEZE_ENTITY_POSITION(BuildVehicle, true);
+			ENTITY::SET_ENTITY_AS_MISSION_ENTITY(BuildVehicle, 1, 1);
+
+			int iClass = VEHICLE::GET_VEHICLE_CLASS(BuildVehicle);
+			if (iClass == 15 || iClass == 16)
+				MaxOutAllModsNoWheels(BuildVehicle, iClass);
+			else
+				MakeModsNotWar(BuildVehicle, RandVehModsist());
+
+			brain->ThisVeh = BuildVehicle;
+			brain->Driver = true;
+			brain->FindPlayer = 0;
+
+			if (!HasASeat(BuildVehicle))
+				brain->ApprochPlayer = false;
+
+			if (brain->PrefredVehicle == 8)
 			{
-				for (int i = 0; i < iSeating + iSpare; i++)
+				brain->IsPlane = true;
+				Vector3 MyPos = ENTITY::GET_ENTITY_COORDS(BuildVehicle, true);
+				MyPos.z = 550.00;
+				brain->Oppressor = OppresiveDump(Vector4(MyPos.x, MyPos.y, MyPos.z, 0.0));
+				ENTITY::ATTACH_ENTITY_TO_ENTITY(brain->Oppressor, BuildVehicle, PED::GET_PED_BONE_INDEX(BuildVehicle, 0), 0.00, 3.32999945, -0.10, 0.00, 0.00, 0.00, false, false, false, false, 2, true);
+				ENTITY::SET_ENTITY_ALPHA(BuildVehicle, 0, 0);
+				MoveEntity(BuildVehicle, MyPos);
+			}
+			else if (brain->PrefredVehicle == 2 || brain->PrefredVehicle == 4)
+				brain->IsHeli = true;
+			else if (brain->PrefredVehicle == 5 || brain->PrefredVehicle == 3)
+			{
+				brain->IsPlane = true;
+				if (!PrivateJet && HasASeat(BuildVehicle) && brain->Friendly)
 				{
-					LoggerLight("Fill Vehicle with peds");
-					int iLevel = UniqueLevels();
-
-					ClothBank MB = NewClothBank();
-					int iGetGunnin = YourGunNum();
-					PlayerBrain newBrain = PlayerBrain(MB.Name, MB.Name + std::to_string(iLevel), MB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), iLevel, false, myBrains->Nationality, iGetGunnin, 0);
-					newBrain.Driver = false;
-					newBrain.Passenger = true;
-					newBrain.ThisVeh = BuildVehicle;
-					newBrain.Friendly = myBrains->Friendly;
-					PedList.push_back(newBrain);
-					Ped CarPed = PlayerPedGen(VecLocal, &PedList[PedList.size() - 1]);
-					WarptoAnyVeh(BuildVehicle, CarPed, i);
-					GunningIt(CarPed, 6);
+					brain->PlaneLand = 10;
+					brain->AirTranspport = true;
+					brain->IsSpecialPed = true;
+					brain->ApprochPlayer = false;
+					PrivateJet = true;
+					canFill = false;
 				}
 			}
+
+			if (newPlayer)
+			{
+				brain->ThisPed = PlayerPedGen(VecLocal, brain, false);
+				WarptoAnyVeh(BuildVehicle, brain->ThisPed, -1);
+				GunningIt(brain->ThisPed, 6);
+				PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(brain->ThisPed, 1);
+				int Seating = VEHICLE::GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(BuildVehicle);
+				if (canFill && PlayerZinSesh() + Seating < MySettings.MaxPlayers)
+				{
+					for (int i = 0; i < Seating; i++)
+					{
+						LoggerLight("Fill Vehicle with peds");
+						int Level = UniqueLevels();
+
+						ClothBank MB = NewClothBank();
+						int GetGunnin = YourGunNum();
+
+						int PZSetMinSession = (MySettings.MinSession * 60) * 1000;
+						int PZSetMaxSession = (MySettings.MaxSession * 60) * 1000;
+
+						PlayerBrain NewBrain = PlayerBrain(MB.Name, MB.Name + std::to_string(Level), MB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), Level, false, false, brain->Nationality, GetGunnin, 0, "", -1);
+						NewBrain.Driver = false;
+						NewBrain.Passenger = true;
+						NewBrain.ThisVeh = BuildVehicle;
+						NewBrain.Friendly = brain->Friendly;
+						PedList.push_back(NewBrain);
+						Ped CarPed = PlayerPedGen(VecLocal, &PedList[PedList.size() - 1], false);
+						WarptoAnyVeh(BuildVehicle, CarPed, i);
+						GunningIt(CarPed, 6);
+					}
+				}
+			}
+			else
+				WarptoAnyVeh(BuildVehicle, brain->ThisPed, -1);
+
+			if (MySettings.PassiveMode)
+				ENTITY::SET_ENTITY_ALPHA(BuildVehicle, 120, false);
+
+			VEHICLE::SET_VEHICLE_ENGINE_ON(BuildVehicle, 1, 1, 0);
+			ENTITY::FREEZE_ENTITY_POSITION(BuildVehicle, false);
+
+			if (brain->IsPlane)
+			{
+				FlyPlane(brain->ThisPed, BuildVehicle, PlayerPosi(500.0f), NULL, false, brain->PrefredVehicle);
+				ENTITY::APPLY_FORCE_TO_ENTITY(BuildVehicle, 1, 0, 0, -1, 0, 0, 1, 1, false, false, true, false, true);
+			}
+
+			STREAMING::SET_MODEL_AS_NO_LONGER_NEEDED(VehModel);
 		}
 		else
-			WarptoAnyVeh(BuildVehicle, myBrains->ThisPed, -1);
-
-
-		Vector3 PP = PlayerPosi();
-		PP.z += 150.0;
-		STREAMING::SET_MODEL_AS_NO_LONGER_NEEDED(VehModel);
+			BuildVehicle = NULL;
 	}
-	else
-		BuildVehicle = NULL;
 
 	return BuildVehicle;
 }
 
-void HeistDrips(int iMyArea)
+bool HeistPopUp = true;
+void HeistDrips(int myArea)
 {
-	LoggerLight("HeistDrips, iMyArea == " + std::to_string(iMyArea));
-	vector<Vector4> VectorList = {};
+	LoggerLight("HeistDrips, iMyArea == " + std::to_string(myArea));
+	std::vector<Vector4> VectorList = {};
 
-	if (iMyArea == 0)
+	if (myArea == 0)
 	{
 		VectorList.push_back(Vector4(-1105.577, -1692.11, 4.345489, 0.0));
 		VectorList.push_back(Vector4(-1107.141, -1690.495, 4.353377, 0.0));     //1
 		VectorList.push_back(Vector4(-1105.481, -1690.545, 4.325913, 0.0));     //2--Vesp Beach
 		VectorList.push_back(Vector4(716.5444, -979.9716, 24.11811, 0.0));      //3+Darnel
 	}
-	else if (iMyArea == 1)
+	else if (myArea == 1)
 	{
 
 		VectorList.push_back(Vector4(60.53763, 8.939384, 69.14648, 0.0));      //4
@@ -2581,7 +2724,7 @@ void HeistDrips(int iMyArea)
 		VectorList.push_back(Vector4(61.93483, 7.88855, 69.09691, 0.0));       //7--Vinwood
 
 	}
-	else if (iMyArea == 2)
+	else if (myArea == 2)
 	{
 
 		VectorList.push_back(Vector4(718.9022, -980.336, 24.12285, 0.0));      //8
@@ -2590,7 +2733,7 @@ void HeistDrips(int iMyArea)
 		VectorList.push_back(Vector4(716.5444, -979.9716, 24.11811, 0.0));    //11--Darnels LaMessa
 
 	}
-	else if (iMyArea == 3)
+	else if (myArea == 3)
 	{
 		VectorList.push_back(Vector4(1681.823, 4817.896, 42.01214, 0.0));    //12
 		VectorList.push_back(Vector4(1681.932, 4819.233, 42.03329, 0.0));     //13
@@ -2608,102 +2751,379 @@ void HeistDrips(int iMyArea)
 
 	}
 
-	int iNat = RandomInt(1, 5);
+	int Level;
+	int Nat = RandomInt(1, 5);
+
+	int PZSetMinSession = (MySettings.MinSession * 60) * 1000;
+	int PZSetMaxSession = (MySettings.MaxSession * 60) * 1000;
 
 	for (int i = 0; i < (int)VectorList.size() - 1; i++)
 	{
-		int iLevel = UniqueLevels();
-		int iGetGunnin = YourGunNum();
+		Level = UniqueLevels();
 		ClothBank MB = NewClothBank();
-		PlayerBrain newBrain = PlayerBrain(MB.Name, MB.Name + std::to_string(iLevel), MB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), iLevel, false, iNat, iGetGunnin, 0);
+		PlayerBrain newBrain = PlayerBrain(MB.Name, MB.Name + std::to_string(Level), MB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), Level, false, false, Nat, YourGunNum(), 0, "", - 1);
 		PedList.push_back(newBrain);
-		PlayerPedGen(VectorList[i], &PedList[PedList.size() - 1]);
+		PlayerPedGen(VectorList[i], &PedList[PedList.size() - 1], false);
 	}
-	int iLevel = UniqueLevels();
-
-	int iGetGunnin = YourGunNum();
+	Level = UniqueLevels();
 	ClothBank MB = NewClothBank();
-	PlayerBrain newBrain = PlayerBrain(MB.Name, MB.Name + std::to_string(iLevel), MB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), iLevel, false, iNat, iGetGunnin, 0);
+	PlayerBrain newBrain = PlayerBrain(MB.Name, MB.Name + std::to_string(Level), MB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), Level, false, false, Nat, YourGunNum(), 0, "", - 1);
 	PedList.push_back(newBrain);
-	Ped Bob = PlayerPedGen(VectorList[(int)VectorList.size() - 1], &PedList[PedList.size() - 1]);
+	Ped Bob = PlayerPedGen(VectorList[(int)VectorList.size() - 1], &PedList[PedList.size() - 1], false);
 	WAIT(1200);
 
 	FIRE::ADD_OWNED_EXPLOSION(Bob, VectorList[0].X, VectorList[0].Y, VectorList[0].Z, 0, 1, true, false, 1);
 
-	bHeistPop = false;
+	HeistPopUp = false;
 }
 
+int RadioSwitching = 0;
+
+bool FindNSPMTargets(std::vector<Ped>* playerHaters, Vector3* pos, Ped* peddy, Ped* target)
+{
+	bool OutPut = false;
+	if (ClosedSession)
+	{
+		LoggerLight("FindNSPMTargets");
+		std::vector<std::string> Findings = ReadFile(NspmTargs);
+		int ListSize = (int)Findings.size();
+		for (int i = 0; i < ListSize; i++)
+		{
+			std::string line = Findings[i];
+			if (StringContains("MultiPed=", line))
+			{
+				Ped YoPed = (Ped)StingNumbersInt(line);
+				if (ENTITY::DOES_ENTITY_EXIST(YoPed))
+				{
+					playerHaters->push_back(YoPed);
+					OutPut = true;
+				}
+			}
+			else if (StringContains("FollowPed=", line) || StringContains("Ped=", line))
+			{
+				line = line.substr(4);
+				Ped YoPed = (Ped)StingNumbersInt(line);
+				if (ENTITY::DOES_ENTITY_EXIST(YoPed))
+				{
+					*peddy = YoPed;
+					OutPut = true;
+				}
+				break;
+			}
+			else if (StringContains("AttackPed=", line) || StringContains("RamYou=", line))
+			{
+				line = line.substr(4);
+				Ped YoPed = (Ped)StingNumbersInt(line);
+				if (ENTITY::DOES_ENTITY_EXIST(YoPed))
+				{
+					*target = YoPed;
+					OutPut = true;
+				}
+				break;
+			}
+			else if (StringContains("[Vectors]", line))
+			{
+				if (ListSize > 2)
+				{
+					float LineX = StingNumbersFloat(Findings[i + 1].substr(5));
+					float LineY = StingNumbersFloat(Findings[i + 2].substr(5));
+					float LineZ = StingNumbersFloat(Findings[i + 3].substr(5));
+					*pos = NewVector3(LineX, LineY, LineZ);
+					OutPut = true;
+				}
+				break;
+			}
+		}
+	}
+	return OutPut;
+}
+void ThisWayDriver(PlayerBrain* brain)
+{
+	brain->FindPlayer = InGameTime() + 15000;
+	std::vector<Ped> AltoPed = {};
+	Vector3 NSPMVec = RandomLocation();
+	Entity NSPMPed = NULL;
+	Entity TargetPed = NULL;
+	bool WayPointAct = false;
+
+	if (brain->ThisEnemy != NULL)
+	{
+		if (!(bool)ENTITY::DOES_ENTITY_EXIST(brain->ThisEnemy))
+			brain->ThisEnemy = NULL;
+		else if ((bool)ENTITY::IS_ENTITY_DEAD(brain->ThisEnemy))
+			brain->ThisEnemy = NULL;
+	}
+
+	if (brain->FaveRadio > 0)
+	{
+		if (brain->FaveRadio == 99)
+		{
+			if (RadioSwitching < InGameTime())
+			{
+				RadioSwitching = InGameTime() + LessRandomInt("RadioSwitching01", 20000, 60000);
+				AUDIO::SET_VEH_RADIO_STATION(brain->ThisVeh, (LPSTR)RadioGaGa[LessRandomInt("RadioSwitching02", 0, (int)RadioGaGa.size() - 1)].c_str());
+			}
+		}
+		else if (brain->RadioHeads)
+		{
+			brain->RadioHeads = false;
+			AUDIO::SET_VEH_RADIO_STATION(brain->ThisVeh, (LPSTR)RadioGaGa[brain->FaveRadio].c_str());
+		}
+	}
+	else if (brain->RadioHeads)
+	{
+		brain->RadioHeads = false;
+		AUDIO::SET_VEHICLE_RADIO_ENABLED(brain->ThisVeh, false);
+	}
+
+	if ((bool)UI::IS_WAYPOINT_ACTIVE())
+	{
+		WayPointAct = true;
+		NSPMVec = MyWayPoint();
+		brain->ThisEnemy = NULL;
+	}
+	else if (FindNSPMTargets(&AltoPed, &NSPMVec, &NSPMPed, &TargetPed))
+	{
+		if (AltoPed.size() > 0 && brain->ThisEnemy == NULL)
+		{
+			float fDis = 5000.0f;
+			for (int i = 0; i < (int)AltoPed.size(); i++)
+			{
+				if (ENTITY::DOES_ENTITY_EXIST(AltoPed[i]))
+				{
+					if (!ENTITY::IS_ENTITY_DEAD(AltoPed[i]))
+					{
+						float fpDis = DistanceTo(brain->ThisPed, AltoPed[i]);
+						if (fpDis < fDis)
+						{
+							fDis = fpDis;
+							brain->ThisEnemy = AltoPed[i];
+						}
+					}
+				}
+			}
+		}
+		else if (NSPMPed == NULL && TargetPed == NULL)
+			WayPointAct = true;
+	}
+	else
+	{
+		if (brain->ThisEnemy == NULL)
+			brain->ThisEnemy = FindAFight(brain);
+	}
+
+	if (brain->IsPlane)
+	{
+		if (NSPMPed != NULL)
+			FlyPlane(brain->ThisPed, brain->ThisVeh, EntityPosition(NSPMPed), NSPMPed, false, brain->PrefredVehicle);
+		else if (TargetPed != NULL)
+			FlyPlane(brain->ThisPed, brain->ThisVeh, EntityPosition(TargetPed), TargetPed, true, brain->PrefredVehicle);
+		else if (brain->ThisEnemy != NULL)
+			FlyPlane(brain->ThisPed, brain->ThisVeh, EntityPosition(brain->ThisEnemy), brain->ThisEnemy, true, brain->PrefredVehicle);
+		else
+			FlyPlane(brain->ThisPed, brain->ThisVeh, NSPMVec, NULL, false, brain->PrefredVehicle);
+	}
+	else if (brain->IsHeli)
+	{
+		if (WayPointAct)
+		{
+			if (DistanceTo(brain->ThisPed, NSPMVec) < 150.0f)
+				LandNearHeli(brain->ThisPed, brain->ThisVeh, NSPMVec);
+			else
+				FlyHeli(brain->ThisPed, brain->ThisVeh, NewVector3(NSPMVec.x, NSPMVec.y, NSPMVec.z + 115.0f), 45.0f, 25.0f);
+		}
+		else if (NSPMPed != NULL)
+			ChaseHeli(brain->ThisPed, brain->ThisVeh, NSPMPed);
+		else if (TargetPed != NULL)
+			ChaseHeli(brain->ThisPed, brain->ThisVeh, TargetPed);
+		else if (brain->ThisEnemy != NULL)
+			ChaseHeli(brain->ThisPed, brain->ThisVeh, brain->ThisEnemy);
+		else
+		{
+			if (DistanceTo(brain->ThisPed, NSPMVec) < 150.0f)
+				LandNearHeli(brain->ThisPed, brain->ThisVeh, NSPMVec);
+			else
+				FlyHeli(brain->ThisPed, brain->ThisVeh, NewVector3(NSPMVec.x, NSPMVec.y, NSPMVec.z + 115.0f), 45.0f, 25.0f);
+		}
+	}
+	else
+	{
+		if (WayPointAct)
+			DriveToooDest(brain->ThisPed, brain->ThisVeh, NSPMVec, 35.0f, true, false, false);
+		else if (NSPMPed != NULL)
+			FollowThatCart(brain->ThisPed, brain->ThisVeh, NSPMPed, false);
+		else if (TargetPed != NULL)
+			FollowThatRaming(brain->ThisPed, brain->ThisVeh, TargetPed);
+		else if (brain->ThisEnemy != NULL)
+			FollowThatCart(brain->ThisPed, brain->ThisVeh, brain->ThisEnemy, true);
+		else
+			DriveToooDest(brain->ThisPed, brain->ThisVeh, NSPMVec, 35.0f, true, false, false);
+	}
+}
+void ThisWayFollower(PlayerBrain* brain, bool playVeh)
+{
+	brain->FindPlayer = InGameTime() + 15000;
+	Vector3 NSPMVec = PlayerPosi();
+
+	if (brain->ThisEnemy != NULL)
+	{
+		if (!(bool)ENTITY::DOES_ENTITY_EXIST(brain->ThisEnemy))
+			brain->ThisEnemy = NULL;
+		else if ((bool)ENTITY::IS_ENTITY_DEAD(brain->ThisEnemy))
+			brain->ThisEnemy = NULL;
+	}
+
+	if (brain->IsPlane)
+	{
+		std::vector<Ped> AltoPed = {};
+		Entity NSPMPed = NULL;
+		Entity TargetPed = NULL;
+		if (FindNSPMTargets(&AltoPed, &NSPMVec, &NSPMPed, &TargetPed))
+		{
+			if (AltoPed.size() > 0 && brain->ThisEnemy == NULL)
+			{
+				float fDis = 5000.0f;
+				for (int i = 0; i < (int)AltoPed.size(); i++)
+				{
+					if (ENTITY::DOES_ENTITY_EXIST(AltoPed[i]))
+					{
+						if (!ENTITY::IS_ENTITY_DEAD(AltoPed[i]))
+						{
+							float fpDis = DistanceTo(brain->ThisPed, AltoPed[i]);
+							if (fpDis < fDis)
+							{
+								fDis = fpDis;
+								brain->ThisEnemy = AltoPed[i];
+							}
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			if (brain->ThisEnemy == NULL)
+				brain->ThisEnemy = FindAFight(brain);
+		}
+
+		if (brain->ThisEnemy != NULL)
+			FlyPlane(brain->ThisPed, brain->ThisVeh, EntityPosition(brain->ThisEnemy), brain->ThisEnemy, true, brain->PrefredVehicle);
+		else
+			FlyPlane(brain->ThisPed, brain->ThisVeh, NSPMVec, PLAYER::PLAYER_PED_ID(), false, brain->PrefredVehicle);
+	}
+	else if (brain->IsHeli)
+	{
+		if (playVeh)
+			ChaseHeli(brain->ThisPed, brain->ThisVeh, PLAYER::PLAYER_PED_ID());
+		else
+		{
+			if (DistanceTo(brain->ThisPed, NSPMVec) < 150.0f)
+				LandNearHeli(brain->ThisPed, brain->ThisVeh, NSPMVec);
+			else
+				FlyHeli(brain->ThisPed, brain->ThisVeh, NewVector3(NSPMVec.x, NSPMVec.y, NSPMVec.z + 115.0f), 45.0f, 25.0f);
+		}
+	}
+	else
+	{
+		if (playVeh)
+			FollowThatCart(brain->ThisPed, brain->ThisVeh, PLAYER::PLAYER_PED_ID(), false);
+		else
+			DriveToooDest(brain->ThisPed, brain->ThisVeh, NSPMVec, 35.0f, true, false, false);
+	}
+}
 void CreatePlayer()
 {
 	LoggerLight("CreatePlayer");
 
-	if (iAirCount < 0)
-		iAirCount = 0;
+	if (AirVehCount < 0)
+		AirVehCount = 0;
 
-	int iLevel = UniqueLevels();
-	int iGetGunnin = YourGunNum();
+	int PZSetMinSession = (MySettings.MinSession * 60) * 1000;
+	int PZSetMaxSession = (MySettings.MaxSession * 60) * 1000;
+
+	int Level = UniqueLevels();
+	int GetGunnin = YourGunNum();
 	ClothBank MB = NewClothBank();
-	int iNat = RandomInt(1, 5);
-	PlayerBrain newBrain = PlayerBrain(MB.Name, MB.Name + std::to_string(iLevel), MB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), iLevel, false, iNat, iGetGunnin, 0);
+	int Rad = LessRandomInt("RadioSet", -1, (int)RadioGaGa.size() - 1);
+	if (LessRandomInt("RadioFlik", 0, 20) < 3)
+		Rad = 99;
+	int Nat = RandomInt(1, 5);
+	PlayerBrain newBrain = PlayerBrain(MB.Name, MB.Name + std::to_string(Level), MB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), Level, false, false, Nat, GetGunnin, 0, "", Rad);
 
-	bool bCanFill = false;
-	int iBrain = LessRandomInt("CreatePlayerz01", 1, 10);
+	bool CanFill = false;
+	int BrainType = LessRandomInt("CreatePlayerz01", 1, 10);
 
 	if (MySettings.Aggression == 0)
 	{
+		newBrain.IsSpecialPed = true;
 		newBrain.SessionJumper = true;
 	}
 	else if (MySettings.Aggression == 1)
 	{
-		if (iBrain < 5)
+		if (BrainType < 5)
+		{
+			newBrain.IsSpecialPed = true;
 			newBrain.SessionJumper = true;
+		}
 	}
 	else if (MySettings.Aggression == 2)
 	{
-		if (iBrain < 2)
+		if (BrainType < 2)
 			newBrain.Friendly = false;
-		else if (iBrain > 8)
+		else if (BrainType > 8)
+		{
+			newBrain.IsSpecialPed = true;
 			newBrain.SessionJumper = true;
+		}
 	}
 	else if (MySettings.Aggression == 3)
 	{
-		if (iBrain < 3)
+		if (BrainType < 3)
 			newBrain.Friendly = false;
-		else if (iBrain > 8)
+		else if (BrainType > 8)
+		{
+			newBrain.IsSpecialPed = true;
 			newBrain.SessionJumper = true;
+		}
 	}
 	else if (MySettings.Aggression == 4)
 	{
-		if (iBrain < 4)
+		if (BrainType < 4)
 			newBrain.Friendly = false;
-		else if (iBrain > 9)
+		else if (BrainType > 9)
+		{
+			newBrain.IsSpecialPed = true;
 			newBrain.SessionJumper = true;
+		}
 	}
 	else if (MySettings.Aggression == 5)
 	{
-		if (iBrain < 5)
+		if (BrainType < 5)
 			newBrain.Friendly = false;
-		else if (iBrain > 9)
+		else if (BrainType > 9)
+		{
+			newBrain.IsSpecialPed = true;
 			newBrain.SessionJumper = true;
+		}
 	}
 	else if (MySettings.Aggression == 6)
 	{
-		if (iBrain < 6)
+		if (BrainType < 6)
 			newBrain.Friendly = false;
 	}
 	else if (MySettings.Aggression == 7)
 	{
-		if (iBrain < 7)
+		if (BrainType < 7)
 			newBrain.Friendly = false;
 	}
 	else if (MySettings.Aggression == 8)
 	{
-		if (iBrain < 8)
+		if (BrainType < 8)
 			newBrain.Friendly = false;
 	}
 	else if (MySettings.Aggression == 9)
 	{
-		if (iBrain < 9)
+		if (BrainType < 9)
 			newBrain.Friendly = false;
 	}
 	else
@@ -2712,7 +3132,7 @@ void CreatePlayer()
 	if (!newBrain.Friendly)
 		newBrain.BlipColour = 1;
 
-	if (MySettings.NoRadar)
+	if (!MySettings.PlayerzBlips)
 	{
 		newBrain.OffRadarBool = true;
 		newBrain.OffRadar = -1;
@@ -2724,8 +3144,8 @@ void CreatePlayer()
 
 		if (!newBrain.SessionJumper && newBrain.Friendly)
 			newBrain.ApprochPlayer = true;
-		FindPed MyFinda = FindPed(35.00f, 220.00f, newBrain);
-		MakeFrenz.push_back(MyFinda);
+		PedList.push_back(newBrain);
+		PlayerPedGen(FindPedSpPoint(), &PedList[(int)PedList.size() - 1], false);
 	}
 	else
 	{
@@ -2735,131 +3155,152 @@ void CreatePlayer()
 
 		if (MySettings.Aggression < 4)
 		{
-			if (iAirCount < MySettings.AirVeh)
+			if (AirVehCount < MySettings.AirVeh)
 			{
 				if (iTypeO < 5 && newBrain.Friendly)
 				{
-					iAirCount++;
+					AirVehCount++;
 					newBrain.PrefredVehicle = 3;//Plane
 					newBrain.IsPlane = true;
 				}
 				else if (iTypeO < 20 && newBrain.Friendly)
 				{
-					iAirCount++;
+					AirVehCount++;
 					newBrain.PrefredVehicle = 2;//Heli 
 					newBrain.IsHeli = true;
-					bCanFill = true;
+					CanFill = true;
 				}
 				else
 				{
 					newBrain.PrefredVehicle = 1;//Veh				
-					bCanFill = true;
+					CanFill = true;
 				}
 			}
 			else
 			{
 				newBrain.PrefredVehicle = 1;//Veh				
-				bCanFill = true;
+				CanFill = true;
 			}
 		}
 		else
 		{
-			if (iAirCount < MySettings.AirVeh)
+			if (AirVehCount < MySettings.AirVeh)
 			{
 				if (iTypeO < 5 && MySettings.Aggression > 6)
 				{
-					iAirCount++;
+					AirVehCount++;
 					newBrain.IsPlane = true;
 					newBrain.PrefredVehicle = 8;//Oppressor
 				}
 				else if (iTypeO < 15)
 				{
 					newBrain.PrefredVehicle = 6;//ArmoredVeh
-					bCanFill = true;
+					CanFill = true;
 				}
 				else if (iTypeO < 30)
 				{
-					iAirCount++;
+					AirVehCount++;
 					newBrain.IsPlane = true;
 					newBrain.PrefredVehicle = 5;//AttPlane
 				}
 				else if (iTypeO < 40)
 				{
-					iAirCount++;
+					AirVehCount++;
 					newBrain.IsHeli = true;
 					newBrain.PrefredVehicle = 4;
-					bCanFill = true;
+					CanFill = true;
 				}
 				else if (iTypeO < 50 && newBrain.Friendly)
 				{
-					iAirCount++;
+					AirVehCount++;
 					newBrain.IsPlane = true;
 					newBrain.PrefredVehicle = 3;//Plane
 				}
 				else if (iTypeO < 55 && newBrain.Friendly)
 				{
-					iAirCount++;
+					AirVehCount++;
 					newBrain.IsHeli = true;
 					newBrain.PrefredVehicle = 2;//Heli 
-					bCanFill = true;
+					CanFill = true;
 				}
 				else
 				{
-					bCanFill = true;
+					CanFill = true;
 					newBrain.PrefredVehicle = 1;//Veh
 				}
 			}
 			else
 			{
-				bCanFill = true;
+				CanFill = true;
 				if (iTypeO < 25)
 					newBrain.PrefredVehicle = 6;//ArmoredVeh
 				else
 					newBrain.PrefredVehicle = 1;//Veh
 			}
 
-			if (!bRentoCop && LessRandomInt("RentoCop", 1, 20) < 2)
+			if (!RentoCop && LessRandomInt("RentoCop", 1, 20) < 2)
 			{
-				bRentoCop = true;
+				RentoCop = true;
 				newBrain.Friendly = true;
+				newBrain.IsSpecialPed = true;
 				newBrain.IsPlane = false;
 				newBrain.IsHeli = false;
 				newBrain.BlipColour = 0;
 				if (newBrain.PFMySetting.Male)
-					newBrain.PFMySetting.Cothing = PZclass::ClothX("Cop", { 0, 0, -1, 0, 35, 0, 25, 0, 58, 0, 0, 55 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { -1, -1, -1, -1, -1 });
+					newBrain.PFMySetting.Cothing = ClothX("Cop", { 0, 0, -1, 0, 35, 0, 25, 0, 58, 0, 0, 55 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { -1, -1, -1, -1, -1 });
 				else
-					newBrain.PFMySetting.Cothing = PZclass::ClothX("Cop", { 0, 0, -1, 14, 34, 0, 25, 0, 35, 0, 0, 48 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { -1, -1, -1, -1, -1 });
-				newBrain.PrefredVehicle = 15;
+					newBrain.PFMySetting.Cothing = ClothX("Cop", { 0, 0, -1, 14, 34, 0, 25, 0, 35, 0, 0, 48 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { -1, -1, -1, -1, -1 });
+				newBrain.PrefredVehicle = 1;
+				newBrain.FaveVehicle = "police5";
 				newBrain.GunSelect = 15;
 				newBrain.RentaCop = true;
-				bCanFill = false;
+				CanFill = false;
 			}
 		}
-
-		FindVeh myCar = FindVeh(15.00f, 145.00f, true, bCanFill, newBrain);
-		MakeCarz.push_back(myCar);
+		PedList.push_back(newBrain);
+		newBrain.ThisVeh = SpawnVehicle(&PedList[(int)PedList.size() - 1], true, true);
+		
 	}
 }
 void InABuilding()
 {
 	LoggerLight("InABuilding");
 
-	int iMit = LessRandomInt("InABuilding", 0, (int)AFKPlayers.size() - 1);
+	int PZSetMinSession = (MySettings.MinSession * 60) * 1000;
+	int PZSetMaxSession = (MySettings.MaxSession * 60) * 1000;
 
-	string sName = SillyNameList();
-	Blip FakeB = LocalBlip(NULL, AFKPlayers[iMit], 417, sName, 0);
+	int iMit = LessRandomInt("InABuilding", 0, (int)AFKPlayers.size() - 1);
+	std::string sName = SillyNameList();
+	if (AddHackAttacks)
+	{
+		sName = "DoomSlayer";
+		iMit = 3;
+	}
+	Blip FakeB = NULL;
+	LocalBlip(&FakeB, AFKPlayers[iMit], 417, sName, 0);
 	int iNat = RandomInt(1, 5);
 	AfkPlayer MyAfk = AfkPlayer(FakeB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), iNat, iMit, sName, sName, UniqueLevels());
+	if (AddHackAttacks)
+	{
+		MyAfk.TheHacker = true;
+		AddHackAttacks = false;
+		HackAttacks = true;
+	}
+
 	AFKList.push_back(MyAfk);
 }
+
+int NewPedTime = 0;	
 void NewPlayer()
 {
 	LoggerLight("NewPlayer");
-	iNextPlayer = InGameTime() + RandomInt(PZSetMinWait, PZSetMaxWait);
+	int PZSetMinWait = MySettings.MinWait * 1000;
+	int PZSetMaxWait = MySettings.MaxWait * 1000;
+
+	NewPedTime = InGameTime() + RandomInt(PZSetMinWait, PZSetMaxWait);
 
 	int iHeister = NearHiest();
-
-	if (PlayerZinSesh(true) + 5 < MySettings.MaxPlayers && iHeister != -1 && bHeistPop)
+	if (PlayerZinSesh() + 5 < MySettings.MaxPlayers && iHeister != -1 && HeistPopUp)
 		HeistDrips(iHeister);
 	else
 	{
@@ -2869,22 +3310,36 @@ void NewPlayer()
 			InABuilding();
 	}
 }
-void DropObjects(Vector3 vTarget)
+
+Prop WindMill;
+bool GotWindMill = false;
+void EclipsWindMill()
+{
+	LoggerLight("AddEclipsWindMill");
+	if (WindMill == NULL)
+		WindMill = BuildProps("prop_windmill_01", NewVector3(-832.50, 290.95, 83.00), NewVector3(-90.00, 94.72, 0.00), false);
+	else
+	{
+		ENTITY::DELETE_ENTITY(&WindMill);
+		WindMill = NULL;
+	}
+}
+void DropObjects(Vector3 target)
 {
 	LoggerLight("DropObjects");
 
-	string sObject;
+	std::string sObject;
 	Entity Plop;
 	if (LessRandomInt("DropObjects", 1, 10) < 5)
 	{
 		sObject = DropProplist[LessRandomInt("GetObject", 0, (int)DropProplist.size() - 1)];
-		Plop = BuildProps(sObject, vTarget, NewVector3(0.0, 0.0, 0.0), true, false);
+		Plop = BuildProps(sObject, target, NewVector3(0.0, 0.0, 0.0), true);
 		ENTITY::SET_ENTITY_AS_NO_LONGER_NEEDED(&Plop);
 
 	}
 	else
 	{
-		Plop = SpawnVehicleProp(vTarget);
+		Plop = SpawnVehicleProp(target);
 		ENTITY::SET_ENTITY_AS_NO_LONGER_NEEDED(&Plop);
 	}
 }
@@ -2894,14 +3349,23 @@ const std::vector<std::string> fluids = {
 	"cut_trevor1",
 	"cs_trev1_blood_pool",
 };
-void EasyWayOut(Ped Vic)
+void TakeAwayYourMoney(MoneyBags* moneybag)
 {
-	WEAPON::GIVE_DELAYED_WEAPON_TO_PED(Vic, MyHashKey("WEAPON_pistol"), 1, true);
-	WEAPON::SET_PED_AMMO(Vic, MyHashKey("WEAPON_pistol"), 100);
-	WEAPON::SET_CURRENT_PED_WEAPON(Vic, MyHashKey("WEAPON_pistol"), true);
+	for (int i = 0; i < (int)moneybag->TheseBags.size(); i++)
+	{
+		if ((bool)ENTITY::DOES_ENTITY_EXIST(moneybag->TheseBags[i]))
+			ENTITY::DELETE_ENTITY(&moneybag->TheseBags[i]);
+	}
+}
+
+void EasyWayOut(Ped peddy)
+{
+	WEAPON::GIVE_DELAYED_WEAPON_TO_PED(peddy, MyHashKey("WEAPON_pistol"), 1, true);
+	WEAPON::SET_PED_AMMO(peddy, MyHashKey("WEAPON_pistol"), 100);
+	WEAPON::SET_CURRENT_PED_WEAPON(peddy, MyHashKey("WEAPON_pistol"), true);
 	WAIT(450);
-	ForceAnim(Vic, "mp_suicide", "pistol", GetPosV4(Vic));
-	AUDIO::PLAY_SOUND_FROM_ENTITY(-1, "GENERIC_CURSE_HIGH", Vic, 0, 0, 0);
+	ForceAnim(peddy, "mp_suicide", "pistol", EntityPositionV4(peddy));
+	AUDIO::PLAY_SOUND_FROM_ENTITY(-1, "GENERIC_CURSE_HIGH", peddy, 0, 0, 0);
 	WAIT(700);
 	int WaitHere = InGameTime() + 200;
 	while (true)
@@ -2911,7 +3375,7 @@ void EasyWayOut(Ped Vic)
 		if ((bool)STREAMING::HAS_NAMED_PTFX_ASSET_LOADED((LPSTR)fluids[0].c_str()))
 		{
 			GRAPHICS::_SET_PTFX_ASSET_NEXT_CALL((LPSTR)fluids[0].c_str());
-			GRAPHICS::START_PARTICLE_FX_NON_LOOPED_ON_ENTITY((LPSTR)fluids[1].c_str(), Vic, 0.0f, 0.15f, 0.75f, 0.0f, 0.0f, 90.0f, 1.0f, false, false, false);
+			GRAPHICS::START_PARTICLE_FX_NON_LOOPED_ON_ENTITY((LPSTR)fluids[1].c_str(), peddy, 0.0f, 0.15f, 0.75f, 0.0f, 0.0f, 90.0f, 1.0f, false, false, false);
 		}
 		else
 			STREAMING::REQUEST_NAMED_PTFX_ASSET((LPSTR)fluids[0].c_str());
@@ -2919,26 +3383,26 @@ void EasyWayOut(Ped Vic)
 		if ((bool)STREAMING::HAS_NAMED_PTFX_ASSET_LOADED((LPSTR)fluids[2].c_str()))
 		{
 			GRAPHICS::_SET_PTFX_ASSET_NEXT_CALL((LPSTR)fluids[2].c_str());
-			GRAPHICS::START_PARTICLE_FX_NON_LOOPED_ON_ENTITY((LPSTR)fluids[3].c_str(), Vic, 0.0f, 0.15f, 0.75f, 0.0f, 0.0f, 90.0f, 0.5f, false, false, false);
+			GRAPHICS::START_PARTICLE_FX_NON_LOOPED_ON_ENTITY((LPSTR)fluids[3].c_str(), peddy, 0.0f, 0.15f, 0.75f, 0.0f, 0.0f, 90.0f, 0.5f, false, false, false);
 		}
 		else
 			STREAMING::REQUEST_NAMED_PTFX_ASSET((LPSTR)fluids[2].c_str());
 
 		WAIT(1);
 	}
-	ENTITY::SET_ENTITY_HEALTH(Vic, 1);
+	ENTITY::SET_ENTITY_HEALTH(peddy, 1);
 }
-void PlayHorn(Vehicle Vic, int duration)
+void PlayHorn(Vehicle vic, int duration)
 {
-	VEHICLE::START_VEHICLE_HORN(Vic, duration, MyHashKey("HELDDOWN"), 0);
+	VEHICLE::START_VEHICLE_HORN(vic, duration, MyHashKey("HELDDOWN"), 0);
 }
-void FollowOn(PlayerBrain* brain, bool inVeh, bool PlayVeh)
+void FollowOn(PlayerBrain* brain, bool inVeh, bool playVeh)
 {
 	if (brain != NULL)
 	{
 		brain->WanBeFriends = false;
 		brain->ApprochPlayer = false;
-		brain->TimeOn += 600000;
+		brain->TimeOn = InGameTime() + ((MySettings.MaxSession * 60) * 1000);
 		brain->Follower = true;
 		brain->BlipColour = 38;
 		if (brain->ThisBlip != NULL)
@@ -2946,124 +3410,123 @@ void FollowOn(PlayerBrain* brain, bool inVeh, bool PlayVeh)
 
 		if (inVeh)
 		{
-			brain->EnterVehQue = false;
-			brain->FindPlayer = InGameTime() + 7000;
+			brain->FindPlayer = InGameTime() + 5000;
 			RelGroupMember(brain->ThisPed, Gp_Follow);
 			PlayerEnterVeh(brain->ThisVeh);
 		}
 		else
 		{
-			if (PlayVeh)
+			if (playVeh)
 			{
-				brain->EnterVehQue = true;
-				PedDoGetIn(PED::GET_VEHICLE_PED_IS_IN(PLAYER::PLAYER_PED_ID(), false), brain->ThisPed, brain->MyIdentity);
+				PedDoGetIn(GetPlayersVehicle(), brain);
 				RelGroupMember(brain->ThisPed, Gp_Follow);
 			}
 			else
-			{
-				brain->EnterVehQue = false;
 				FolllowTheLeader(brain->ThisPed);
-			}
 		}
 	}
-	YouFriend = PZclass::JoinMe("Empty");
+	YouFriend = JoinMe(brain);
 }
 void WillYouBeMyFriend()
 {
-	if (!(bool)ENTITY::DOES_ENTITY_EXIST(YouFriend.MyBrain->ThisPed))
-		ClearYourFriend(true);
-	else if ((bool)ENTITY::IS_ENTITY_DEAD(YouFriend.MyBrain->ThisPed))
-		ClearYourFriend(true);
-	else if (YouFriend.MyBrain->Driver)
+	if (YouFriend.MyBrain != nullptr)
 	{
-		if (!(bool)ENTITY::DOES_ENTITY_EXIST(YouFriend.MyBrain->ThisVeh))
+		if (!(bool)ENTITY::DOES_ENTITY_EXIST(YouFriend.MyBrain->ThisPed))
 			ClearYourFriend(true);
-		else if ((bool)ENTITY::IS_ENTITY_DEAD(YouFriend.MyBrain->ThisVeh))
+		else if ((bool)ENTITY::IS_ENTITY_DEAD(YouFriend.MyBrain->ThisPed))
 			ClearYourFriend(true);
-		else if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(PLAYER::PLAYER_PED_ID(), 0) && (bool)PED::IS_PED_IN_ANY_VEHICLE(YouFriend.MyBrain->ThisPed, 0) && DistanceTo(PlayerPosi(), ENTITY::GET_ENTITY_COORDS(YouFriend.MyBrain->ThisPed, true)) < 35.0f)
+		else if (YouFriend.MyBrain->Driver)
 		{
-			if (YouFriend.Horny)
+			if (!(bool)ENTITY::DOES_ENTITY_EXIST(YouFriend.MyBrain->ThisVeh))
+				ClearYourFriend(true);
+			else if ((bool)ENTITY::IS_ENTITY_DEAD(YouFriend.MyBrain->ThisVeh))
+				ClearYourFriend(true);
+			else if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(PLAYER::PLAYER_PED_ID(), 0) && (bool)PED::IS_PED_IN_ANY_VEHICLE(YouFriend.MyBrain->ThisPed, 0) && DistanceTo(PlayerPosi(), ENTITY::GET_ENTITY_COORDS(YouFriend.MyBrain->ThisPed, true)) < 35.0f)
 			{
-				YouFriend.Horny = false;
-				PlayHorn(YouFriend.MyBrain->ThisVeh, RandomInt(3000, 8000));
-			}
-			TopLeft(PZLang[91] + ControlSym[23] + PZLang[93] + ". " + PZLang[91] + ControlSym[46] + PZLang[94]);
-			AddMarker(YouFriend.MyBrain->ThisVeh);
-			if (ButtonDown(23, true))
-			{
-				if (YouFriend.Planes)
+				if (YouFriend.Horny)
 				{
-					PlayerEnterVeh(YouFriend.MyBrain->ThisVeh);
-					YouFriend.MyBrain->PlaneLand = 5;
-					ClearYourFriend(false);
+					YouFriend.Horny = false;
+					PlayHorn(YouFriend.MyBrain->ThisVeh, RandomInt(3000, 8000));
 				}
-				else if (MySettings.Aggression < 9)
-					FollowOn(YouFriend.MyBrain, true, false);
-				else
+				GVM::TopLeft(YouFriend.MyBrain->MyName + " " + PZTranslate[12] + ControlSym[MySettings.Control_Keys_EnterVeh] + PZTranslate[14] + ". " + PZTranslate[12] + ControlSym[MySettings.Control_Keys_DissmisPed] + PZTranslate[15]);
+				AddMarker(YouFriend.MyBrain->ThisVeh);
+				if (GVM::ButtonDown(MySettings.Control_Keys_EnterVeh))
 				{
-					FightPlayer(YouFriend.MyBrain);
-					ClearYourFriend(false);
-				}
-			}
-			else if (ButtonDown(46, false))
-			{
-				PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(YouFriend.MyBrain->ThisPed, false);	
-				ClearYourFriend(false);
-			}
-		}
-		else
-		{
-			if (YouFriend.MyBrain->PlaneLand == 5)
-				YouFriend.MyBrain->PlaneLand = 7;
-			ClearYourFriend(true);
-		}
-	}
-	else
-	{
-		if ((bool)PED::IS_PED_IN_ANY_VEHICLE(PLAYER::PLAYER_PED_ID(), 0))
-		{
-			if (DistanceTo(PlayerPosi(), ENTITY::GET_ENTITY_COORDS(YouFriend.MyBrain->ThisPed, true)) < 15.0f)
-			{
-				TopLeft(PZLang[91] + ControlSym[86] + PZLang[95]);
-				AddMarker(YouFriend.MyBrain->ThisPed);
-				if (ButtonDown(86, false))
-				{
-					if (MySettings.Aggression < 9)
-						FollowOn(YouFriend.MyBrain, false, true);
+					if (YouFriend.Planes)
+					{
+						PlayerEnterVeh(YouFriend.MyBrain->ThisVeh);
+						YouFriend.MyBrain->PlaneLand = 5;
+						ClearYourFriend(false);
+					}
+					else if (MySettings.Aggression < 9 || YouFriend.MyBrain->IsInContacts)
+						FollowOn(YouFriend.MyBrain, true, false);
 					else
 					{
 						FightPlayer(YouFriend.MyBrain);
 						ClearYourFriend(false);
 					}
 				}
+				else if (GVM::ButtonDown(MySettings.Control_Keys_DissmisPed))
+				{
+					PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(YouFriend.MyBrain->ThisPed, false);
+
+					if (YouFriend.MyBrain->Follower)
+						GetOutVehicle(YouFriend.MyBrain->ThisPed);
+						
+					ClearYourFriend(false);
+				}
 			}
-			else if (DistanceTo(PlayerPosi(), ENTITY::GET_ENTITY_COORDS(YouFriend.MyBrain->ThisPed, true)) > 25.0f)
+			else
+			{
+				if (YouFriend.MyBrain->PlaneLand == 5)
+					YouFriend.MyBrain->PlaneLand = 7;
 				ClearYourFriend(true);
+			}
 		}
 		else
 		{
-			if (DistanceTo(PlayerPosi(), ENTITY::GET_ENTITY_COORDS(YouFriend.MyBrain->ThisPed, true)) < 10.0f)
+			if ((bool)PED::IS_PED_IN_ANY_VEHICLE(PLAYER::PLAYER_PED_ID(), 0))
 			{
-				TopLeft(PZLang[91] + ControlSym[47] + PZLang[96] + ". " + PZLang[91] + ControlSym[46] + PZLang[94]);
-				AddMarker(YouFriend.MyBrain->ThisPed);
-				if (ButtonDown(47, true))
+				if (DistanceTo(PlayerPosi(), ENTITY::GET_ENTITY_COORDS(YouFriend.MyBrain->ThisPed, true)) < 15.0f)
 				{
-					if (MySettings.Aggression < 9)
-						FollowOn(YouFriend.MyBrain, false, false);
-					else
+					GVM::TopLeft(YouFriend.MyBrain->MyName + " " + PZTranslate[12] + ControlSym[86] + PZTranslate[16]);
+					AddMarker(YouFriend.MyBrain->ThisPed);
+					if (GVM::ButtonDown(86))
 					{
-						FightPlayer(YouFriend.MyBrain);
-						ClearYourFriend(false);
+						if (MySettings.Aggression < 9)
+							FollowOn(YouFriend.MyBrain, false, true);
+						else
+						{
+							FightPlayer(YouFriend.MyBrain);
+							ClearYourFriend(false);
+						}
 					}
 				}
-				else if (ButtonDown(46, false))
-					ClearYourFriend(false);
 			}
-			else if (DistanceTo(PlayerPosi(), ENTITY::GET_ENTITY_COORDS(YouFriend.MyBrain->ThisPed, true)) > 25.0f)
-				ClearYourFriend(true);
+			else
+			{
+				if (DistanceTo(PlayerPosi(), ENTITY::GET_ENTITY_COORDS(YouFriend.MyBrain->ThisPed, true)) < 10.0f)
+				{
+					GVM::TopLeft(YouFriend.MyBrain->MyName + " " + PZTranslate[12] + ControlSym[MySettings.Control_Keys_AddPed] + PZTranslate[17] + ". " + PZTranslate[12] + ControlSym[MySettings.Control_Keys_DissmisPed] + PZTranslate[15]);
+					AddMarker(YouFriend.MyBrain->ThisPed);
+					if (GVM::ButtonDown(MySettings.Control_Keys_AddPed))
+					{
+						if (MySettings.Aggression < 9)
+							FollowOn(YouFriend.MyBrain, false, false);
+						else
+						{
+							FightPlayer(YouFriend.MyBrain);
+							ClearYourFriend(false);
+						}
+					}
+					else if (GVM::ButtonDown(MySettings.Control_Keys_DissmisPed))
+						ClearYourFriend(false);
+				}
+			}
 		}
 	}
 }
+
 void PlayersKiller()
 {
 	int iKiller = -1;
@@ -3083,7 +3546,7 @@ void PlayersKiller()
 
 	if (iKiller != -1)
 	{
-		BottomLeft(PZLang[97] + std::to_string(PedList[iKiller].Kills) + " - " + std::to_string(PedList[iKiller].Killed) + " " + PedList[iKiller].MyName);
+		GVM::BottomLeft(PZTranslate[18] + std::to_string(PedList[iKiller].Killed) + " - " + std::to_string(PedList[iKiller].Kills) + " " + PedList[iKiller].MyName);
 
 		if (MySettings.Aggression < 2)
 		{
@@ -3092,131 +3555,15 @@ void PlayersKiller()
 			PedList[iKiller].TimeOn = 0;
 		}
 	}
-
-	ENTITY::SET_ENTITY_INVINCIBLE(PLAYER::PLAYER_PED_ID(), 1);
-	ENTITY::SET_ENTITY_ALPHA(PLAYER::PLAYER_PED_ID(), 120, false);
-	iPasiveMode = InGameTime() + 15000;
-
 	PlayDead = false;
 }
-int BagTimes = 0;
-void ThemMoneyBAgs()
-{
-	if ((int)MoneyDrops.size() > 0)
-	{
-		if (BagTimes < InGameTime())
-		{
-			BagTimes = InGameTime() + 500;
-			for (int i = 0; i < (int)MoneyDrops.size(); i++)
-			{
-				if (MoneyDrops[i].BagUp)
-				{
-					if (MoneyDrops[i].TimeOn < InGameTime())
-					{
-						if ((int)MoneyDrops[i].TheseBags.size() > 0)
-						{
-							for (int ii = 0; ii < (int)MoneyDrops[i].TheseBags.size(); ii++)
-							{
-								if ((bool)ENTITY::DOES_ENTITY_EXIST(MoneyDrops[i].TheseBags[ii]))
-									ENTITY::DELETE_ENTITY(&MoneyDrops[i].TheseBags[ii]);
 
-							}
-						}
-						int iJoin = ReteaveBrain(MoneyDrops[i].PedId);
-						if (iJoin != -1)
-						{
-							PedList[iJoin].Friendly = true;
-							PedList[iJoin].BlipColour = 0;
-
-							PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(PedList[iJoin].ThisPed, false);
-							UI::SET_BLIP_COLOUR(PedList[iJoin].ThisBlip, 0);
-							PED::REMOVE_PED_FROM_GROUP(PedList[iJoin].ThisPed);
-							PED::SET_PED_RELATIONSHIP_GROUP_HASH(PedList[iJoin].ThisPed, Gp_Friend);
-							AI::CLEAR_PED_TASKS_IMMEDIATELY(PedList[iJoin].ThisPed);
-						}
-						MoneyDrops.erase(MoneyDrops.begin() + i);
-					}
-				}
-				else
-				{
-					if (MoneyDrops[i].TimeOn < InGameTime())
-					{
-						MoneyDrops[i].BagUp = true;
-						MoneyDrops[i].TimeOn = InGameTime() + 30000;
-					}
-					else
-					{
-						Vector4 AboutHere = InAreaOf(ENTITY::GET_ENTITY_COORDS(MoneyDrops[i].ThisPed, true), 0.01f, 4.0f);
-						Prop MoreBag = BuildProps(MoneyDrops[i].Bags, NewVector3(AboutHere.X, AboutHere.Y, AboutHere.Z + 5.0f), NewVector3(0.0, 0.0, 0.0), true, false);
-						MoneyDrops[i].TheseBags.push_back(MoreBag);
-
-						if (MoneyDrops[i].CollectBag)
-						{
-							int iJoin = ReteaveBrain(MoneyDrops[i].PedId);
-							if (iJoin != -1)
-							{
-								PedList[iJoin].MoneyBags = true;
-								RunHere(MoneyDrops[i].ThisPed, ENTITY::GET_ENTITY_COORDS(MoneyDrops[i].TheseBags[0], false));
-								PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(MoneyDrops[i].ThisPed, true);
-							}
-							MoneyDrops[i].CollectBag = false;
-						}
-					}
-				}
-
-			}
-		}
-		else
-		{
-			for (int i = 0; i < (int)MoneyDrops.size(); i++)
-			{
-				if ((bool)ENTITY::IS_ENTITY_DEAD(MoneyDrops[i].ThisPed))
-				{
-					if ((int)MoneyDrops[i].TheseBags.size() > 0)
-					{
-						for (int ii = 0; ii < (int)MoneyDrops[i].TheseBags.size(); ii++)
-						{
-							if ((bool)ENTITY::DOES_ENTITY_EXIST(MoneyDrops[i].TheseBags[ii]))
-								ENTITY::DELETE_ENTITY(&MoneyDrops[i].TheseBags[ii]);
-
-						}
-					}
-					MoneyDrops.erase(MoneyDrops.begin() + i);
-				}
-				else if (MoneyDrops[i].TheseBags.size() > 0)
-				{
-					if (DistanceTo(ENTITY::GET_ENTITY_COORDS(MoneyDrops[i].ThisPed, true), ENTITY::GET_ENTITY_COORDS(MoneyDrops[i].TheseBags[0], true)) < 0.5)
-					{
-						ENTITY::DELETE_ENTITY(&MoneyDrops[i].TheseBags[0]);
-						MoneyDrops[i].TheseBags.erase(MoneyDrops[i].TheseBags.begin());
-					}
-					else
-					{
-						RunHere(MoneyDrops[i].ThisPed, ENTITY::GET_ENTITY_COORDS(MoneyDrops[i].TheseBags[0], false));
-						PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(MoneyDrops[i].ThisPed, true);
-					}
-				}
-			}
-		}
-	}
-	else
-		DropMoneys = false;
-}
-Prop WindMill;
-void EclipsWindMill()
-{
-	LoggerLight("AddEclipsWindMill");
-	if (WindMill == NULL)
-		WindMill = BuildProps("prop_windmill_01", NewVector3(-832.50, 290.95, 83.00), NewVector3(-90.00, 94.72, 0.00), false, false);
-	else
-	{
-		ENTITY::DELETE_ENTITY(&WindMill);
-		WindMill = NULL;
-	}
-}
+bool HackerIsInSession = false;
 bool KeepFrieands = true;
+std::vector<Vector3> PlaneFlightPath;
+int ChatSHat = 0;
 
-void ProcessAfk(PZclass::AfkPlayer* brain)
+void ProcessAfk(AfkPlayer* brain)
 {
 	if (ChatSHat < InGameTime())
 	{
@@ -3224,18 +3571,157 @@ void ProcessAfk(PZclass::AfkPlayer* brain)
 		if (RandomInt(1, 50) < 15 && ShitTalk.size() < 5)
 			RandomChat(brain->MyName, 2, brain->Nationality);
 	}
+	else if (brain->TheHacker)
+	{
+		if (brain->StartTheHack == 0)
+		{
+			if (PlayerZinSesh() > MySettings.MaxPlayers - 4)
+			{
+				brain->StartTheHack--;
+				brain->HackingTime = InGameTime() + 2500;
+			}
+		}
+		else if (brain->StartTheHack == 1)
+		{
+			if (brain->HackingTime < InGameTime())
+			{
+				brain->StartTheHack = 2;
+				for (int i = 0; i < (int)PedList.size(); i++)
+				{
+					if (PedList[i].ThisPed != NULL)
+						DropObjects(EntityPosition(PedList[i].ThisPed));
+				}
+			}
+		}
+		else if (brain->StartTheHack == 2)
+		{
+			brain->StartTheHack = 3;
+
+			int iPedLocate = ReteaveAfk(brain->MyIdentity);
+
+			ClothBank MB = NewClothBank();
+			int iNat = RandomInt(1, 5);
+			int iGetGunnin = YourGunNum();
+			Vector3 LandHere = FowardOf(PLAYER::PLAYER_PED_ID(), 5, true);
+			PlayerBrain newBrain = PlayerBrain(brain->MyName, brain->MyIdentity, MB, InGameTime() + 10000000, brain->Level, false, false, iNat, iGetGunnin, 0, "", -1);
+			newBrain.TheHacker = true;
+			newBrain.IsSpecialPed = true;
+			newBrain.PFMySetting.Model = "a_c_cat_01";
+			PedList.push_back(newBrain);
+			PlayerPedGen(Vector4(LandHere.x, LandHere.y, LandHere.z, 0.0), &PedList[PedList.size() - 1], false);
+			AFKList[iPedLocate].MoveToOpen = true;
+			AFKList[iPedLocate].TimeOn = 0;
+
+		}
+		else if (brain->StartTheHack < -50)
+		{
+			if (!(bool)ENTITY::IS_ENTITY_DEAD((Entity)PLAYER::PLAYER_PED_ID()))
+			{
+				HackerIsInSession = true;
+				WAIT(4000);
+				brain->StartTheHack = 1;
+				Vector3 WindyMiller = NewVector3(-797.73, 295.47, 190.00);
+				if (WindMill == NULL)
+					EclipsWindMill();
+
+				WAIT(1000);
+				for (int i = 0; i < (int)PedList.size(); i++)
+				{
+					if (PedList[i].ThisPed != NULL)
+						MoveEntity(PedList[i].ThisPed, InAreaOfV3(WindyMiller, 2.0f, 7.0f));
+					WAIT(500);
+				}
+				WAIT(1000);
+				MoveEntity(PLAYER::PLAYER_PED_ID(), InAreaOfV3(WindyMiller, 2.0f, 7.0f));
+				brain->HackingTime = InGameTime() + 2000;
+			}
+		}
+		else if (brain->StartTheHack < 0)
+		{
+			if (brain->HackingTime < InGameTime())
+			{
+				brain->StartTheHack--;
+				brain->HackingTime = InGameTime() + 500;
+				if (brain->HackSwitch)
+					LocalBlip(&brain->ThisBlip, AFKPlayers[brain->App], 303, brain->MyName, 1);
+				else
+					LocalBlip(&brain->ThisBlip, AFKPlayers[brain->App], 417, brain->MyName, 0);
+
+				brain->HackSwitch = !brain->HackSwitch;
+			}
+		}
+	}
 }
-void ProcessPZ(PZclass::PlayerBrain* brain)
+void ProcessPZ(PlayerBrain* brain)
 {
 	if (brain->ThisPed == NULL)
 	{
-
+		if (brain->TimeOn < InGameTime())
+			PedCleaning(brain, PZTranslate[29], false);
 	}
 	else
 	{
 		if (brain->YoDeeeed)
 		{
-			if (brain->DeathSequence == 1 || brain->DeathSequence == 3 || brain->DeathSequence == 5 || brain->DeathSequence == 7)
+			if (brain->DeathSequence == 99)
+			{
+				int iDie = WhoShotMe(brain->ThisPed);
+
+				if (iDie == -10)
+				{
+					if (brain->Bounty)
+						AddMonies(7000);
+
+					brain->Friendly = false;
+					brain->BlipColour = 1;
+					brain->ApprochPlayer = false;
+					brain->Follower = false;
+					brain->Killed += 1;
+
+					GVM::BottomLeft(PZTranslate[18] + std::to_string(brain->Killed) + " - " + std::to_string(brain->Kills) + " " + brain->MyName);
+
+				}
+				else if (iDie != -1)
+					GVM::BottomLeft(PedList[iDie].MyName + PZTranslate[19] + brain->MyName);
+				else
+				{
+					if (brain->EWO)
+					{
+						brain->EWO = false;
+						GVM::BottomLeft(brain->MyName + " " + PZTranslate[25]);
+					}
+					else
+						GVM::BottomLeft(brain->MyName + " " + PZTranslate[28]);
+				}
+
+				brain->DeathTime = InGameTime() + 10000;
+				brain->ThisEnemy = NULL;
+				brain->Bounty = false;
+				if (brain->MoneyDrops.TheseBags.size() > 0)
+					TakeAwayYourMoney(&brain->MoneyDrops);
+				brain->MoneyDrops.TheseBags.clear();
+				brain->MoneyDrops.BagsDroped = 0;
+				brain->MoneyDrops.BagTimer = 0;
+				brain->DropMoneyBags = false;
+				brain->InCombat = false;
+				brain->SessionJumper = false;
+				brain->Driver = false;
+				brain->Passenger = false;
+				brain->OffRadarBool = false;
+				brain->IsPlane = false;
+				brain->IsHeli = false;
+				brain->GrabVeh = false;
+				brain->IsAnimal = false;
+
+				if (brain->Friendly || brain->Follower && iDie != -10)
+				{
+					brain->ApprochPlayer = true;
+					brain->WanBeFriends = false;
+				}
+				PED::REMOVE_PED_FROM_GROUP(brain->ThisPed);
+				brain->DeathSequence = 1;
+			}
+			else if (brain->DeathSequence == 1 || brain->DeathSequence == 3 || brain->DeathSequence == 5 || brain->DeathSequence == 7)
 			{
 				if (brain->DeathTime < InGameTime())
 				{
@@ -3279,7 +3765,7 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 					if (brain->Killed > RandomInt(8, 22) || MySettings.Aggression < 2)
 						brain->TimeOn = 0;
 
-					PlayerPedGen(FindPedSpPoint(InAreaOf(PlayerPosi(), 35.0f, 50.0f)), brain);
+					PlayerPedGen(FindPedSpPoint(), brain, false);
 				}
 			}
 		}
@@ -3289,324 +3775,391 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 			Ped ThePlayer = PLAYER::PLAYER_PED_ID();
 			Ped PlayZero = brain->ThisPed;
 			Vector3 PlayerPos = PlayerPosi();
-			Vector3 PedPos = ENTITY::GET_ENTITY_COORDS(PlayZero, false);
+			Vector3 PedPos = EntityPosition(PlayZero);
 
 			if ((bool)ENTITY::IS_ENTITY_DEAD(PlayZero))
 			{
 				ResetPlayer(brain, false);
-
-				int iDie = WhoShotMe(PlayZero);
-
-				if (iDie == -10)
-				{
-					if (brain->Bounty)
-						AddMonies(7000);
-
-					brain->Friendly = false;
-					brain->BlipColour = 1;
-					brain->ApprochPlayer = false;
-					brain->Follower = false;
-					brain->Killed += 1;
-
-					BottomLeft(PZLang[97] + std::to_string(brain->Killed) + " - " + std::to_string(brain->Kills) + " " + brain->MyName);
-
-				}
-				else if (iDie != -1)
-					BottomLeft(PedList[iDie].MyName + PZLang[98] + brain->MyName);
-				else
-				{
-					if (brain->EWO)
-					{
-						brain->EWO = false;
-						BottomLeft(brain->MyName + " " + PZLang[108]);
-					}
-					else
-						BottomLeft(brain->MyName + " " + PZLang[81]);
-				}
-
-				brain->DeathSequence = 1;
-				brain->DeathTime = GameTime + 10000;
-				brain->TimeOn += 60000;
-				brain->ThisEnemy = NULL;
-				brain->Bounty = false;
-				brain->MoneyBags = false;
-				brain->InCombat = false;
-				brain->SessionJumper = false;
-				brain->EnterVehQue = false;
-				brain->Driver = false;
-				brain->Passenger = false;
-				brain->Befallen = false;
-				brain->OffRadarBool = false;
-				brain->IsPlane = false;
-				brain->IsHeli = false;
-				brain->GrabVeh = false;
-
-				if (brain->Friendly || brain->Follower && iDie != -10)
-				{
-					brain->ApprochPlayer = true;
-					brain->WanBeFriends = false;
-				}
-
-				PED::REMOVE_PED_FROM_GROUP(PlayZero);
-
+				brain->DeathSequence = 99;
 				brain->YoDeeeed = true;
 			}
 			else
 			{
 				BlipingBlip(brain);
 
+				if (InPasiveMode)
+				{
+					if (ENTITY::GET_ENTITY_ALPHA(brain->ThisPed) != 120)
+						ENTITY::SET_ENTITY_ALPHA(brain->ThisPed, 120, false);
+
+					if (brain->ThisVeh != NULL)
+					{
+						if (ENTITY::GET_ENTITY_ALPHA(brain->ThisVeh) != 120)
+							ENTITY::SET_ENTITY_ALPHA(brain->ThisVeh, 120, false);
+					}
+				}
+				else
+				{
+					if (ENTITY::GET_ENTITY_ALPHA(brain->ThisPed) != 255)
+						ENTITY::SET_ENTITY_ALPHA(brain->ThisPed, 255, false);
+
+					if (brain->ThisVeh != NULL)
+					{
+						if (ENTITY::GET_ENTITY_ALPHA(brain->ThisVeh) != 255)
+							ENTITY::SET_ENTITY_ALPHA(brain->ThisVeh, 255, false);
+					}
+				}
+
 				if (brain->TimeOn < GameTime)
 				{
 					GetOutVehicle(PlayZero);
-					PedCleaning(brain, PZLang[82], false);
+					PedCleaning(brain, PZTranslate[29], true);
 				}
-				else if (PedPos.z + 10 < GroundHight(PedPos))
+				else if (brain->IsSpecialPed)
 				{
-					if (brain->Befallen)
+					if (brain->TheHacker)
 					{
-						if (brain->DeathTime < GameTime)
-							ENTITY::SET_ENTITY_HEALTH(PlayZero, -1);
-					}
-					else
-					{
-						brain->Befallen = true;
-						brain->DeathTime = GameTime + 5000;
-					}
-				}
-				else if (brain->Befallen)
-					brain->Befallen = false;
-				else if (brain->SessionJumper)
-				{
-					if (DistanceTo(PedPos, PlayerPos) < 10.00f)
-					{
-						PED::REMOVE_PED_FROM_GROUP(PlayZero);
-						PedCleaning(brain, PZLang[83], true);
-						brain->TimeToGo = true;
-					}
-				}
-				else if (brain->MoneyBags)
-				{
-
-				}
-				else if (brain->WanBeFriends)
-				{
-					if ((bool)ENTITY::HAS_ENTITY_BEEN_DAMAGED_BY_ENTITY(PlayZero, ThePlayer, 1) || (bool)PLAYER::IS_PLAYER_FREE_AIMING_AT_ENTITY(ThePlayer, PlayZero))
-					{
-						brain->WanBeFriends = false;
-
-						if (YouFriend.MyIdentity != "Empty")
-						{
-							if (YouFriend.MyIdentity == brain->MyIdentity)
-								ClearYourFriend(false);
-						}
-						if (MySettings.Aggression > 1)
-							FightPlayer(brain);
-						else
-							PED::SET_PED_FLEE_ATTRIBUTES(PlayZero, 32, 1);
-					}
-					else
-					{
-						if (brain->FindPlayer < GameTime)
-						{
-							if (brain->IsPlane)
-								brain->ApprochPlayer = false;
-							else if (brain->IsHeli)
-								LandNearHeli(PlayZero, brain->ThisVeh, PlayerPos);
-							else if (brain->Driver)
-								DriveToooDest(PlayZero, brain->ThisVeh, PlayerPosi(), 35.0f, true, false, false);
-							else
-								WalkHere(PlayZero, FindingShops(PlayZero));
-
-							brain->FindPlayer = GameTime + 5000;
-						}
-					}
-				}
-				else if (brain->AirTranspport)
-				{
-					if (brain->PlaneLand == 10)
-					{
-						if ((bool)PED::IS_PED_IN_VEHICLE(PlayZero, brain->ThisVeh, false))
-						{
-							if ((int)landPlane.size() < 1)
-								landPlane = BuildFlightPath(PlayerPos);
-							ENTITY::FREEZE_ENTITY_POSITION(brain->ThisVeh, false);
-							PED::SET_PED_CAN_BE_DRAGGED_OUT(PlayZero, false);
-							AI::SET_DRIVE_TASK_DRIVING_STYLE(PlayZero, 4194304);// 16777216
-							brain->FlightPath = 0;
-							FlyPlane(PlayZero, brain->ThisVeh, landPlane[brain->FlightPath], NULL);
-							brain->PlaneLand--;
-						}
-					}
-					else if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(PlayZero, 0) || brain->ThisVeh == NULL)
-					{
-						brain->Driver = false;
-						brain->TimeOn = 0;
-					}
-					else if (brain->PlaneLand == 9)
-					{
-						if (DistanceTo(landPlane[brain->FlightPath], PedPos) < 150.0f)
-						{
-							LandNearPlane(PlayZero, brain->ThisVeh, landPlane[1], landPlane[2]);
-							brain->FlightPath++;
-							brain->FlightPath++;
-							brain->PlaneLand--;
-						}
-						else
-							FlyPlane(PlayZero, brain->ThisVeh, landPlane[brain->FlightPath], NULL);
-					}
-					else if (brain->PlaneLand == 8)
-					{
-						if (DistanceTo(landPlane[2], PedPos) < 10.0f)
-						{
-							ENTITY::FREEZE_ENTITY_POSITION(brain->ThisVeh, true);
-							brain->PlaneLand--;
-						}
-					}
-					else if (brain->PlaneLand == 7)
-					{
-						if (DistanceTo(PlayerPos, PedPos) < 20.0f)
-						{
-							LoggerLight("TakeOff...7");
-							StayOnGround(brain->ThisVeh);
-							ClearYourFriend(true);
-
-							YouFriend.MyBrain = brain;
-							YouFriend.MyIdentity = brain->MyIdentity;
-							YouFriend.Planes = true;
-							YouFriend.Horny = false;
-							brain->TimeOn = InGameTime() + 1200000;
-							brain->PlaneLand--;
-						}
-					}
-					else if (brain->PlaneLand == 6)
-					{
-
-					}
-					else if (brain->PlaneLand == 5)
-					{
-						if ((bool)PED::IS_PED_IN_VEHICLE(ThePlayer, brain->ThisVeh, false))
-						{
-							LoggerLight("TakeOff...5");
-							ENTITY::FREEZE_ENTITY_POSITION(brain->ThisVeh, false);
-							brain->FlightPath++;
-							DriveToooDest(PlayZero, brain->ThisVeh, landPlane[brain->FlightPath], 12.0f, false, true, true);
-							brain->PlaneLand--;
-						}
-					}
-					else if (brain->PlaneLand == 4)
-					{
-						if (DistanceTo(landPlane[brain->FlightPath], PedPos) < 5.0f)
-						{
-							LoggerLight("TakeOff...4");
-							brain->FlightPath++;
-							DriveToooDest(PlayZero, brain->ThisVeh, landPlane[brain->FlightPath], 12.0f, true, true, true);
-							brain->PlaneLand--;
-						}
-					}
-					else if (brain->PlaneLand == 3)
-					{
-						if (DistanceTo(landPlane[brain->FlightPath], PedPos) < 5.0f)
-						{
-							LoggerLight("TakeOff...3");
-							brain->FlightPath++;
-							FlyPlane(PlayZero, brain->ThisVeh, landPlane[brain->FlightPath], NULL);
-							brain->PlaneLand--;
-						}
-					}
-					else if (brain->PlaneLand == 2)
-					{
-						if (DistanceTo(landPlane[brain->FlightPath], PedPos) < 150)
-						{
-							LoggerLight("TakeOff...2");
-							if (LandingGear(brain->ThisVeh) == 0)
-								VEHICLE::_SET_VEHICLE_LANDING_GEAR(brain->ThisVeh, 1);
-							brain->FlightPath++;
-							if (brain->FlightPath < (int)landPlane.size())
-								FlyPlane(PlayZero, brain->ThisVeh, landPlane[brain->FlightPath], NULL);
-							else
-							{
-								brain->FlightPath = 0;
-								landPlane = BuildFlightPath(FlyMeToo);
-								FlyPlane(PlayZero, brain->ThisVeh, landPlane[0], NULL);
-								brain->PlaneLand = 9;
-							}
-						}
-						else
-							FlyPlane(PlayZero, brain->ThisVeh, landPlane[brain->FlightPath], NULL);
-					}
-				}
-				else if (brain->RentaCop)
-				{
-					if (brain->ThisVeh == NULL || ENTITY::IS_ENTITY_DEAD(brain->ThisVeh))
-					{
-						EasyWayOut(PlayZero);
-						brain->Driver = false;
-						brain->TimeOn = 0;
-					}
-					else
-					{
-						
-						if (brain->ThisEnemy == ThePlayer)
-						{
-							if ((bool)PED::IS_PED_IN_ANY_VEHICLE(ThePlayer, 0))
-							{
-								Vehicle PlayVeh = PED::GET_VEHICLE_PED_IS_IN(ThePlayer, false);
-								if (VEHICLE::IS_VEHICLE_STOPPED(PlayVeh))
-								{
-									if (DistanceTo(PlayZero, ThePlayer) < 30.0f)
-									{
-										AI::CLEAR_PED_TASKS(PlayZero);
-										GetOutVehicle(PlayZero);
-										AI::TASK_ARREST_PED(PlayZero, ThePlayer);
-									}
-								}
-							}
-							else
-							{
-								brain->ThisEnemy = NULL;
-								AI::CLEAR_PED_TASKS(PlayZero);
-							}
-						}
-						else if (brain->ThisEnemy != NULL)
+						if (brain->ThisEnemy != NULL)
 						{
 							if (!(bool)ENTITY::DOES_ENTITY_EXIST(brain->ThisEnemy))
 								brain->ThisEnemy = NULL;
 							else if ((bool)ENTITY::IS_ENTITY_DEAD(brain->ThisEnemy))
 								brain->ThisEnemy = NULL;
+							else if (brain->FindPlayer < GameTime)
+							{
+								int iVic = ReteaveBrain(brain->ThisEnemy);
+								if (iVic > -1 && iVic < (int)PedList.size())
+									FireOrb(brain, &PedList[iVic]);
+								else if (iVic == -1)
+									FireOrb(brain, nullptr);
+								brain->ThisEnemy = NULL;
+							}
 						}
 						else
 						{
-							if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(PlayZero, 0))
+							brain->ThisEnemy = FindAFight(brain);
+							if (brain->ThisEnemy == NULL)
+								WalkHere(PlayZero, FindingShops(PlayZero));
+							else
 							{
-								if (brain->FindPlayer < GameTime)
+								brain->FindPlayer = GameTime + RandomInt(25000, 30000);
+								MoveEntity(PlayZero, EntityPosition(brain->ThisEnemy));
+								GreefWar(PlayZero, brain->ThisEnemy);
+							}
+						}
+					}
+					else if (brain->SessionJumper)
+					{
+						if (DistanceTo(PedPos, PlayerPos) < 10.00f)
+						{
+							PED::REMOVE_PED_FROM_GROUP(PlayZero);
+							PedCleaning(brain, PZTranslate[30], true);
+							brain->TimeToGo = true;
+						}
+					}
+					else if (brain->AirTranspport)
+					{
+						if (brain->PlaneLand == 10)
+						{
+							if ((bool)PED::IS_PED_IN_VEHICLE(PlayZero, brain->ThisVeh, false))
+							{
+								if ((int)PlaneFlightPath.size() < 1)
+									PlaneFlightPath = BuildFlightPath(PlayerPos);
+								ENTITY::FREEZE_ENTITY_POSITION(brain->ThisVeh, false);
+								PED::SET_PED_CAN_BE_DRAGGED_OUT(PlayZero, false);
+								AI::SET_DRIVE_TASK_DRIVING_STYLE(PlayZero, 262144);//16777216
+								brain->FlightPath = 0;
+								FlyPlane(PlayZero, brain->ThisVeh, PlaneFlightPath[brain->FlightPath], NULL, false, brain->PrefredVehicle);
+								brain->PlaneLand--;
+							}
+						}
+						else if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(PlayZero, 0) || brain->ThisVeh == NULL)
+						{
+							brain->Driver = false;
+							brain->TimeOn = 0;
+						}
+						else if (brain->PlaneLand == 9)
+						{
+							if (DistanceTo(PlaneFlightPath[brain->FlightPath], PedPos) < 150.0f)
+							{
+								LoggerLight("TakeOff...9");
+								LandNearPlane(PlayZero, brain->ThisVeh, PlaneFlightPath[1], PlaneFlightPath[2]);
+								brain->FlightPath++;
+								brain->FlightPath++;
+								brain->PlaneLand--;
+							}
+							else
+								FlyPlane(PlayZero, brain->ThisVeh, PlaneFlightPath[brain->FlightPath], NULL, false, brain->PrefredVehicle);
+						}
+						else if (brain->PlaneLand == 8)
+						{
+							if (DistanceTo(PlaneFlightPath[2], PedPos) < 30.0f)
+							{
+								LoggerLight("TakeOff...8");
+								ENTITY::FREEZE_ENTITY_POSITION(brain->ThisVeh, true);
+								brain->PlaneLand--;
+							}
+						}
+						else if (brain->PlaneLand == 7)
+						{
+							if (DistanceTo(PlayerPos, PedPos) < 30.0f)
+							{
+								LoggerLight("TakeOff...7");
+								StayOnGround(brain->ThisVeh);
+								ClearYourFriend(true);
+								YouFriend.MyBrain = brain;
+
+								brain->TimeOn = InGameTime() + ((MySettings.MaxSession * 60) * 1000);
+								brain->PlaneLand--;
+							}
+						}
+						else if (brain->PlaneLand == 6)
+						{
+
+						}
+						else if (brain->PlaneLand == 5)
+						{
+							if ((bool)PED::IS_PED_IN_VEHICLE(ThePlayer, brain->ThisVeh, false))
+							{
+								LoggerLight("TakeOff...5");
+								ENTITY::FREEZE_ENTITY_POSITION(brain->ThisVeh, false);
+								brain->FlightPath++;
+								DriveToooDest(PlayZero, brain->ThisVeh, PlaneFlightPath[brain->FlightPath], 12.0f, false, true, true);
+								brain->PlaneLand--;
+							}
+						}
+						else if (brain->PlaneLand == 4)
+						{
+							if (DistanceTo(PlaneFlightPath[brain->FlightPath], PedPos) < 5.0f)
+							{
+								LoggerLight("TakeOff...4");
+								brain->FlightPath++;
+								DriveToooDest(PlayZero, brain->ThisVeh, PlaneFlightPath[brain->FlightPath], 12.0f, true, true, true);
+								brain->PlaneLand--;
+							}
+						}
+						else if (brain->PlaneLand == 3)
+						{
+							if (DistanceTo(PlaneFlightPath[brain->FlightPath], PedPos) < 5.0f)
+							{
+								LoggerLight("TakeOff...3");
+								brain->FlightPath++;
+								FlyPlane(PlayZero, brain->ThisVeh, PlaneFlightPath[brain->FlightPath], NULL, false, brain->PrefredVehicle);
+								brain->PlaneLand--;
+							}
+						}
+						else if (brain->PlaneLand == 2)
+						{
+							if (DistanceTo(PlaneFlightPath[brain->FlightPath], PedPos) < 150)
+							{
+								LoggerLight("TakeOff...2");
+								if (LandingGear(brain->ThisVeh) == 0)
+									VEHICLE::_SET_VEHICLE_LANDING_GEAR(brain->ThisVeh, 1);
+								brain->FlightPath++;
+								if (brain->FlightPath < (int)PlaneFlightPath.size())
+									FlyPlane(PlayZero, brain->ThisVeh, PlaneFlightPath[brain->FlightPath], NULL, false, brain->PrefredVehicle);
+								else
 								{
-									brain->FindPlayer = GameTime + 5000;
-									GetInVehicle(PlayZero, brain->ThisVeh, -1, true);
+									brain->FlightPath = 0;
+									PlaneFlightPath = BuildFlightPath(PlayerPos);
+									FlyPlane(PlayZero, brain->ThisVeh, PlaneFlightPath[0], NULL, false, brain->PrefredVehicle);
+									brain->PlaneLand = 9;
 								}
 							}
-							else if (brain->FindPlayer < GameTime)
+							else
+								FlyPlane(PlayZero, brain->ThisVeh, PlaneFlightPath[brain->FlightPath], NULL, false, brain->PrefredVehicle);
+						}
+					}
+					else if (brain->RentaCop)
+					{
+						if (brain->ThisVeh == NULL || ENTITY::IS_ENTITY_DEAD(brain->ThisVeh))
+						{
+							EasyWayOut(PlayZero);
+							brain->Driver = false;
+							brain->TimeOn = 0;
+						}
+						else
+						{
+
+							if (brain->ThisEnemy == ThePlayer)
 							{
-								brain->FindPlayer = GameTime + 5000;
-								if ((bool)PED::IS_PED_IN_ANY_VEHICLE(ThePlayer, 0))
+								Vehicle PlayVeh = GetPlayersVehicle();
+								if (PlayVeh != NULL)
 								{
-									brain->ThisEnemy = ThePlayer;
-									AI::TASK_VEHICLE_CHASE(PlayZero, ThePlayer);
-									VEHICLE::SET_VEHICLE_SIREN(brain->ThisVeh, true);
+									if (VEHICLE::IS_VEHICLE_STOPPED(PlayVeh))
+									{
+										if (DistanceTo(PlayZero, ThePlayer) < 30.0f)
+										{
+											AI::CLEAR_PED_TASKS(PlayZero);
+											GetOutVehicle(PlayZero);
+											AI::TASK_ARREST_PED(PlayZero, ThePlayer);
+										}
+									}
 								}
 								else
 								{
-									brain->ThisEnemy = FindAFight(PlayZero, brain->Friendly, false, false);
-									if (brain->ThisEnemy != NULL)
+									brain->ThisEnemy = NULL;
+									AI::CLEAR_PED_TASKS(PlayZero);
+								}
+							}
+							else if (brain->ThisEnemy != NULL)
+							{
+								if (!(bool)ENTITY::DOES_ENTITY_EXIST(brain->ThisEnemy))
+									brain->ThisEnemy = NULL;
+								else if ((bool)ENTITY::IS_ENTITY_DEAD(brain->ThisEnemy))
+									brain->ThisEnemy = NULL;
+							}
+							else
+							{
+								if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(PlayZero, 0))
+								{
+									if (brain->FindPlayer < GameTime)
 									{
+										brain->FindPlayer = GameTime + 5000;
+										GetInVehicle(PlayZero, brain->ThisVeh, -1);
+									}
+								}
+								else if (brain->FindPlayer < GameTime)
+								{
+									brain->FindPlayer = GameTime + 5000;
+									if ((bool)PED::IS_PED_IN_ANY_VEHICLE(ThePlayer, 0))
+									{
+										brain->ThisEnemy = ThePlayer;
+										AI::TASK_VEHICLE_CHASE(PlayZero, ThePlayer);
 										VEHICLE::SET_VEHICLE_SIREN(brain->ThisVeh, true);
-										PickFight(PlayZero, brain->ThisVeh, brain->ThisEnemy, brain->PrefredVehicle);
 									}
 									else
-										VEHICLE::SET_VEHICLE_SIREN(brain->ThisVeh, false);
+									{
+										brain->ThisEnemy = FindAFight(brain);
+										if (brain->ThisEnemy == NULL)
+											VEHICLE::SET_VEHICLE_SIREN(brain->ThisVeh, false);
+										else
+										{
+											VEHICLE::SET_VEHICLE_SIREN(brain->ThisVeh, true);
+											PickFight(PlayZero, brain->ThisVeh, brain->ThisEnemy, brain->PrefredVehicle);
+										}
+									}
 								}
 							}
 						}
 					}
+				}
+				else if (brain->PlayerInVeh)
+				{
+					if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(ThePlayer, 0))
+						brain->PlayerInVeh = false;
+					else if (brain->FindPlayer < GameTime)
+						ThisWayDriver(brain);
+				}
+				else if (brain->DropMoneyBags)
+				{
+					if (brain->MoneyDrops.BagsDroped < 10)
+					{
+						if (brain->MoneyDrops.BagTimer < InGameTime())
+						{
+							brain->MoneyDrops.BagsDroped++;
+							brain->MoneyDrops.BagTimer = InGameTime() + 500;
+							Vector4 AboutHere = InAreaOf(ENTITY::GET_ENTITY_COORDS(PlayZero, true), 0.01f, 4.0f);
+							Prop MoreBag = BuildProps(brain->MoneyDrops.Bags, NewVector3(AboutHere.X, AboutHere.Y, AboutHere.Z + 5.0f), NewVector3(0.0, 0.0, 0.0), true);
+							brain->MoneyDrops.TheseBags.push_back(MoreBag);
+
+							PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(PlayZero, true);
+							RunHere(PlayZero, AboutHere);
+						}
+						for (int i = 0; i < (int)brain->MoneyDrops.TheseBags.size(); i++)
+						{
+							if (DistanceTo(PlayZero, brain->MoneyDrops.TheseBags[i]) < 1.25f)
+							{
+								if ((bool)ENTITY::DOES_ENTITY_EXIST(brain->MoneyDrops.TheseBags[i]))
+									ENTITY::DELETE_ENTITY(&brain->MoneyDrops.TheseBags[i]);
+							}
+						}
+					}
+					else
+					{
+						TakeAwayYourMoney(&brain->MoneyDrops);
+
+						brain->ApprochPlayer = true;
+						brain->Friendly = true;
+						brain->BlipColour = 0;
+
+						PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(PlayZero, false);
+						UI::SET_BLIP_COLOUR(brain->ThisBlip, 0);
+						PED::REMOVE_PED_FROM_GROUP(PlayZero);
+						PED::SET_PED_RELATIONSHIP_GROUP_HASH(PlayZero, Gp_Friend);
+						AI::CLEAR_PED_TASKS_IMMEDIATELY(PlayZero);
+
+						brain->MoneyDrops.TheseBags.clear();
+						brain->MoneyDrops.BagsDroped = 0;
+						brain->MoneyDrops.BagTimer = 0;
+						brain->DropMoneyBags = false;
+						brain->HackReaction = false;
+					}
+				}
+				else if (brain->HackReaction)
+				{
+					if (LessRandomInt("HackReackt", 1, 10) < 3)
+						brain->TimeOn = 0;
+					else
+						RandomChat(brain->MyName, 5, 0);
+					brain->HackReaction = false;
+				}
+				else if (brain->WanBeFriends)
+				{
+					if (YouFriend.MyBrain != nullptr)
+					{
+						if (YouFriend.MyBrain->MyIdentity == brain->MyIdentity)
+						{
+							if ((bool)ENTITY::HAS_ENTITY_BEEN_DAMAGED_BY_ENTITY(PlayZero, ThePlayer, 1) || (bool)PLAYER::IS_PLAYER_FREE_AIMING_AT_ENTITY(ThePlayer, PlayZero))
+							{
+								ClearYourFriend(false);
+								brain->WanBeFriends = false;
+
+								if (MySettings.Aggression > 1)
+									FightPlayer(brain);
+								else
+									PED::SET_PED_FLEE_ATTRIBUTES(PlayZero, 32, 1);
+							}
+							else if (brain->ThisVeh != NULL)
+							{
+								if ((bool)PED::IS_PED_IN_ANY_VEHICLE(ThePlayer, 0))
+								{
+									if (brain->ThisVeh == GetPlayersVehicle())
+										brain->PlayerInVeh = true;
+									else
+									{
+										ClearYourFriend(true);
+										brain->WanBeFriends = false;
+									}
+								}
+								else if (DistanceTo(PedPos, PlayerPos) > 60.0f)
+								{
+									ClearYourFriend(true);
+									brain->WanBeFriends = false;
+								}
+							}
+							else
+							{
+								if (brain->FindPlayer < GameTime)
+								{
+									WalkHere(PlayZero, PlayerPos);
+									brain->FindPlayer = GameTime + 5000;
+								}
+								else if (DistanceTo(PedPos, PlayerPos) > 15.0f)
+								{
+									ClearYourFriend(true);
+									brain->WanBeFriends = false;
+								}
+							}
+						}
+						else
+						{
+							ClearYourFriend(true);
+							brain->WanBeFriends = false;
+						}
+					}
+					else
+						brain->WanBeFriends = false;
 				}
 				else if (brain->Follower)
 				{
@@ -3620,15 +4173,16 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 						}
 					}
 
-					if (brain->ApprochPlayer)
+					if (brain->AtTheParty)
+					{
+
+					}
+					else 
 					{
 						if (brain->Driver)
 						{
 							if (brain->ThisVeh == NULL)
-							{
-								brain->ApprochPlayer = false;
 								brain->Driver = false;
-							}
 							else if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(PlayZero, 0))
 							{
 								if ((bool)ENTITY::DOES_ENTITY_EXIST(brain->ThisVeh))
@@ -3637,153 +4191,69 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 									brain->ThisVeh = NULL;
 								}
 							}
+							else if ((bool)PED::IS_PED_IN_ANY_VEHICLE(ThePlayer, 0))
+							{
+								if (brain->ThisVeh == GetPlayersVehicle())
+									brain->PlayerInVeh = true;
+								else if (brain->FindPlayer < GameTime)
+									ThisWayFollower(brain, false);
+							}
 							else
 							{
-								if (DistanceTo(PedPos, PlayerPos) < 30.0f)
+								if (DistanceTo(PedPos, PlayerPos) < 30.0f && !brain->IsPlane)
 								{
+									ClearYourFriend(true);
 									YouFriend.MyBrain = brain;
-									YouFriend.MyIdentity = brain->MyIdentity;
-
-									if (!brain->IsHeli)
-										AI::CLEAR_PED_TASKS(PlayZero);
-
 									brain->WanBeFriends = true;
-									brain->ApprochPlayer = false;
 								}
 								else if (brain->FindPlayer < GameTime)
-								{
-									if (brain->IsPlane)
-										brain->ApprochPlayer = false;
-									else if (brain->IsHeli)
-									{
-										Vector3 VHere = ENTITY::GET_ENTITY_FORWARD_VECTOR(ThePlayer);
-										VHere.x = PlayerPos.x + VHere.x * 5;
-										VHere.y = PlayerPos.y + VHere.y * 5;
-										VHere.z = PlayerPos.z + VHere.z * 5;
-										LandNearHeli(PlayZero, brain->ThisVeh, VHere);
-									}
-									else
-										DriveToooDest(PlayZero, brain->ThisVeh, PlayerPosi(), 35.0f, true, false, false);
-
-									brain->FindPlayer = GameTime + 5000;
-								}
+									ThisWayFollower(brain, false);
 							}
 						}
 						else
 						{
-							brain->ApprochPlayer = false;
-							brain->Passenger = false;
-						}
-					}
-					else if ((bool)PED::IS_PED_IN_ANY_VEHICLE(ThePlayer, 0))
-					{
-						if (brain->Driver)
-						{
-							if (brain->FindPlayer < GameTime)
+							if (brain->Passenger)
 							{
-								brain->FindPlayer = GameTime + 5000;
-								if ((bool)UI::IS_WAYPOINT_ACTIVE())
-								{
-									if (MyWayPoint().x != LetsGoHere.x)
-									{
-										LetsGoHere = MyWayPoint();
-
-										if (brain->IsPlane)
-										{
-
-										}
-										else if (brain->IsHeli)
-										{
-											Vector3 vecHigh = NewVector3(LetsGoHere.x, LetsGoHere.y, LetsGoHere.z + 50.0f);
-											if (DistanceTo(LetsGoHere, PedPos) < 75)
-											{
-												LandNearHeli(PlayZero, brain->ThisVeh, LetsGoHere);
-												brain->FindPlayer = GameTime + 120000;
-											}
-											else
-												FlyHeli(PlayZero, brain->ThisVeh, vecHigh, 45, 0);
-										}
-										else
-											DriveToooDest(PlayZero, brain->ThisVeh, LetsGoHere, 35.0f, true, false, false);
-									}
-								}
-								else
-								{
-									if (brain->ThisEnemy != NULL)
-									{
-										if (!(bool)ENTITY::DOES_ENTITY_EXIST(brain->ThisEnemy))
-											brain->ThisEnemy = NULL;
-										else if ((bool)ENTITY::IS_ENTITY_DEAD(brain->ThisEnemy))
-											brain->ThisEnemy = NULL;
-									}
-									else
-									{
-										brain->ThisEnemy = FindAFight(PlayZero, brain->Friendly, brain->IsPlane, brain->IsHeli);
-										if (brain->ThisEnemy != NULL)
-											PickFight(PlayZero, brain->ThisVeh, brain->ThisEnemy, brain->PrefredVehicle);
-									}
-								}
-							}
-						}
-						else if (brain->Passenger)
-						{
-
-						}
-						else
-						{
-							brain->Passenger = true;
-							Vehicle Vick = PED::GET_VEHICLE_PED_IS_IN(ThePlayer, false);
-							PedDoGetIn(Vick, PlayZero, brain->MyIdentity);
-							brain->TimeOn += 60000;
-						}
-					}
-					else
-					{
-						if (brain->FindPlayer < GameTime)
-						{
-							brain->FindPlayer = GameTime + 5000;
-							if (brain->Driver && !VehicleEnter)
-							{
-								if (DistanceTo(PlayerPos, PedPos) < 25)
+								if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(ThePlayer, 0))
 								{
 									GetOutVehicle(PlayZero);
 
 									PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(PlayZero, false);
-									brain->Driver = false;
-
+									brain->Passenger = false;
 									FolllowTheLeader(PlayZero);
 								}
-								else if (brain->ThisVeh != NULL)
+							}
+							else
+							{
+								if ((bool)PED::IS_PED_IN_ANY_VEHICLE(ThePlayer, 0))
 								{
-									if (brain->FindPlayer < GameTime)
+									Vehicle Vick = GetPlayersVehicle();
+									if (Vick != NULL)
 									{
-										if (brain->IsPlane)
-											brain->ApprochPlayer = false;
-										else if (brain->IsHeli)
-											LandNearHeli(PlayZero, brain->ThisVeh, PlayerPos);
-										else
-											DriveToooDest(PlayZero, brain->ThisVeh, PlayerPosi(), 45.0f, true, false, false);
-
-										brain->FindPlayer = GameTime + 5000;
+										if (!PedDoGetIn(Vick, brain))
+										{
+											if (!EnterFriendsVeh(brain))
+											{
+												if (brain->FaveVehicle == "")
+												{
+													int iClass = VEHICLE::GET_VEHICLE_CLASS(Vick);
+													if (iClass == 15 || iClass == 16)
+														brain->PrefredVehicle = 4;
+													else if (MySettings.Aggression > 5)
+														brain->PrefredVehicle = 6;
+													else
+														brain->PrefredVehicle = 1;
+												}
+												brain->ThisVeh = SpawnVehicle(brain, false, false);
+											}
+										}
 									}
 								}
-								else
+								else if (DistanceTo(PlayerPos, PedPos) > 150.00 && !PED::IS_PED_FALLING(ThePlayer) && !PED::IS_PED_IN_PARACHUTE_FREE_FALL(ThePlayer) && PED::GET_PED_PARACHUTE_STATE(ThePlayer) < 1)
 								{
-									brain->Driver = false;
+									MoveEntity(PlayZero, PlayerPos);
+									FolllowTheLeader(PlayZero);
 								}
-							}
-							else if (brain->Passenger)
-							{
-								GetOutVehicle(PlayZero);
-
-								PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(PlayZero, false);
-								brain->Passenger = false;
-								FolllowTheLeader(PlayZero);
-							}
-							else if (DistanceTo(PlayerPos, PedPos) > 150.00 && !PED::IS_PED_FALLING(ThePlayer) && !PED::IS_PED_IN_PARACHUTE_FREE_FALL(ThePlayer) && PED::GET_PED_PARACHUTE_STATE(ThePlayer) < 1)
-							{
-								MoveEntity(PlayZero, PlayerPos);
-								FolllowTheLeader(PlayZero);
 							}
 						}
 					}
@@ -3803,13 +4273,7 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 					if ((bool)ENTITY::HAS_ENTITY_BEEN_DAMAGED_BY_ENTITY(PlayZero, ThePlayer, 1) || (bool)PED::IS_PED_IN_COMBAT(PlayZero, ThePlayer) || (bool)PLAYER::IS_PLAYER_FREE_AIMING_AT_ENTITY(ThePlayer, PlayZero))
 					{
 						brain->ApprochPlayer = false;
-						brain->WanBeFriends = false;
 						PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(PlayZero, false);
-						if (brain->Follower)
-						{
-							PED::REMOVE_PED_FROM_GROUP(PlayZero);
-							brain->Follower = false;
-						}
 
 						if (MySettings.Aggression > 1)
 							FightPlayer(brain);
@@ -3828,27 +4292,98 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 						}
 						else if (brain->Driver)
 						{
-							if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(PlayZero, 0) || brain->ThisVeh == NULL)
+							if (brain->ThisVeh == NULL)
 								brain->Driver = false;
-							else if (!brain->IsPlane && brain->ApprochPlayer && YouFriend.MyIdentity == "Empty" && DistanceTo(PlayerPos, PedPos) < 50.0f)
+							else if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(PlayZero, 0))
 							{
-								YouFriend.MyBrain = brain;
-								YouFriend.MyIdentity = brain->MyIdentity;
+								ENTITY::SET_ENTITY_ALPHA(brain->ThisVeh, 255, false);
+								brain->Driver = false;
+							}
+							else if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(ThePlayer, 0))
+							{
+								if (!brain->IsPlane && brain->ApprochPlayer && YouFriend.MyBrain == nullptr && DistanceTo(PlayerPos, PedPos) < 50.0f)
+								{
+									YouFriend.MyBrain = brain;
 
-								if (brain->IsHeli)
-									YouFriend.Horny = false;
+									if (brain->IsHeli)
+									{
+										YouFriend.Horny = false;
+										LandNearHeli(PlayZero, brain->ThisVeh, PlayerPos);
+									}
+									else if (brain->Driver)
+										FollowThatCart(PlayZero, brain->ThisVeh, ThePlayer, false);
 
-								brain->WanBeFriends = true;
-								brain->ApprochPlayer = false;
+									brain->WanBeFriends = true;
+									brain->ApprochPlayer = false;
+								}
+								else
+								{
+									if (MySettings.Aggression < 2)
+									{
+										if (!brain->IsHeli && !brain->IsPlane && FindUSeat(brain->ThisVeh, false) != -10)
+										{
+											PlayerBrain* ThisBrian = FindaPassenger(true);
+											if (ThisBrian != nullptr)
+												PedDoGetIn(brain->ThisVeh, ThisBrian);
+										}
+										else
+										{
+											if (brain->FindPlayer < GameTime)
+											{
+												DriveAround(PlayZero);
+												brain->FindPlayer = GameTime + 25000;
+											}
+										}
+									}
+									else
+									{
+										if (brain->FindPlayer < GameTime)
+										{
+											brain->FindPlayer = GameTime + 5000;
+											if (brain->ThisEnemy != NULL)
+											{
+												if (!(bool)ENTITY::DOES_ENTITY_EXIST(brain->ThisEnemy))
+													brain->ThisEnemy = NULL;
+												else if ((bool)ENTITY::IS_ENTITY_DEAD(brain->ThisEnemy))
+													brain->ThisEnemy = NULL;
+											}
+											else if (!brain->IsHeli && !brain->IsPlane && FindUSeat(brain->ThisVeh, false) != -10)
+											{
+												PlayerBrain* ThisBrian = FindaPassenger(true);
+												if (ThisBrian != nullptr)
+													PedDoGetIn(brain->ThisVeh, ThisBrian);
+											}
+											else
+											{
+												brain->ThisEnemy = FindAFight(brain);
+												if (brain->ThisEnemy != NULL)
+												{
+													brain->EnemyPos = DistanceTo((Entity)brain->ThisEnemy, PedPos) - 1.0f;
+													PickFight(PlayZero, brain->ThisVeh, brain->ThisEnemy, brain->PrefredVehicle);
+													FightTogether(brain->ThisVeh, brain->ThisEnemy);
+												}
+											}
+										}
+									}
+								}
 							}
 							else
 							{
 								if (MySettings.Aggression < 2)
 								{
-									if (brain->FindPlayer < GameTime)
+									if (!brain->IsHeli && !brain->IsPlane && FindUSeat(brain->ThisVeh, false) != -10)
 									{
-										DriveAround(PlayZero);
-										brain->FindPlayer = GameTime + 25000;
+										PlayerBrain* ThisBrian = FindaPassenger(true);
+										if (ThisBrian != nullptr)
+											PedDoGetIn(brain->ThisVeh, ThisBrian);
+									}
+									else
+									{
+										if (brain->FindPlayer < GameTime)
+										{
+											DriveAround(PlayZero);
+											brain->FindPlayer = GameTime + 25000;
+										}
 									}
 								}
 								else
@@ -3863,9 +4398,15 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 											else if ((bool)ENTITY::IS_ENTITY_DEAD(brain->ThisEnemy))
 												brain->ThisEnemy = NULL;
 										}
+										else if (!brain->IsHeli && !brain->IsPlane && FindUSeat(brain->ThisVeh, false) != -10)
+										{
+											PlayerBrain* ThisBrian = FindaPassenger(true);
+											if (ThisBrian != nullptr)
+												PedDoGetIn(brain->ThisVeh, ThisBrian);
+										}
 										else
 										{
-											brain->ThisEnemy = FindAFight(PlayZero, brain->Friendly, brain->IsPlane, brain->IsHeli);
+											brain->ThisEnemy = FindAFight(brain);
 											if (brain->ThisEnemy != NULL)
 											{
 												brain->EnemyPos = DistanceTo((Entity)brain->ThisEnemy, PedPos) - 1.0f;
@@ -3881,12 +4422,11 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 						{
 							if (DistanceTo(PedPos, PlayerPos) < 7.0f)
 							{
-								if (brain->ApprochPlayer && YouFriend.MyIdentity == "Empty")
+								if (brain->ApprochPlayer && YouFriend.MyBrain == nullptr)
 								{
 									if (!brain->WanBeFriends)
 									{
 										YouFriend.MyBrain = brain;
-										YouFriend.MyIdentity = brain->MyIdentity;
 
 										brain->WanBeFriends = true;
 										brain->ApprochPlayer = false;
@@ -3919,14 +4459,14 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 									else
 									{
 										brain->FindPlayer = GameTime + RandomInt(10000, 15000);
-										brain->ThisEnemy = FindAFight(PlayZero, brain->Friendly, brain->IsPlane, brain->IsHeli);
-										if (brain->ThisEnemy == NULL)
-											WalkHere(PlayZero, FindingShops(PlayZero));
-										else
+										brain->ThisEnemy = FindAFight(brain);
+										if (brain->ThisEnemy != NULL)
 										{
 											brain->EnemyPos = DistanceTo((Entity)brain->ThisEnemy, PedPos) - 1.0f;
 											GreefWar(PlayZero, brain->ThisEnemy);
 										}
+										else
+											WalkHere(PlayZero, FindingShops(PlayZero));
 									}
 								}
 								else
@@ -3954,13 +4494,19 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 
 					if (brain->Driver)
 					{
-						if (brain->ThisVeh == PED::GET_VEHICLE_PED_IS_IN(ThePlayer, false))
+						if (brain->ThisVeh == NULL)
+							brain->Driver = false;
+						else if (brain->ThisVeh == GetPlayersVehicle())
 						{
+							ENTITY::SET_ENTITY_ALPHA(brain->ThisVeh, 255, false);
 							brain->Driver = false;
 							GetOutVehicle(PlayZero);
 						}
 						else if (!(bool)PED::IS_PED_IN_ANY_VEHICLE(PlayZero, 0))
+						{
+							ENTITY::SET_ENTITY_ALPHA(brain->ThisVeh, 255, false);
 							brain->Driver = false;
+						}
 						else if (brain->FindPlayer < GameTime)
 						{
 							if (brain->ThisEnemy != NULL)
@@ -3970,12 +4516,25 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 								else if ((bool)ENTITY::IS_ENTITY_DEAD(brain->ThisEnemy))
 									brain->ThisEnemy = NULL;
 							}
+							else if (FindUSeat(brain->ThisVeh, false) != -10)
+							{
+								PlayerBrain* ThisBrian = FindaPassenger(false);
+								if (ThisBrian != nullptr)
+									PedDoGetIn(brain->ThisVeh, ThisBrian);
+							}
 							else
 							{
 								if (brain->FindPlayer < GameTime)
 								{
-									brain->ThisEnemy = FindAFight(PlayZero, brain->Friendly, brain->IsPlane, brain->IsHeli);
-									PickFight(PlayZero, brain->ThisVeh, brain->ThisEnemy, brain->PrefredVehicle);
+									brain->ThisEnemy = FindAFight(brain);
+									if (brain->ThisEnemy == NULL)
+									{
+										brain->ThisEnemy = PLAYER::PLAYER_PED_ID();
+										PickFight(PlayZero, brain->ThisVeh, brain->ThisEnemy, brain->PrefredVehicle);
+									}
+									else 
+										PickFight(PlayZero, brain->ThisVeh, brain->ThisEnemy, brain->PrefredVehicle);
+
 									brain->FindPlayer = GameTime + 5000;
 								}
 							}
@@ -4012,7 +4571,7 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 							else
 							{
 								brain->FindPlayer = GameTime + RandomInt(10000, 15000);
-								brain->ThisEnemy = FindAFight(PlayZero, brain->Friendly, brain->IsPlane, brain->IsHeli);
+								brain->ThisEnemy = FindAFight(brain);
 								if (brain->ThisEnemy == NULL)
 									WalkHere(PlayZero, FindingShops(PlayZero));
 								else
@@ -4034,774 +4593,179 @@ void ProcessPZ(PZclass::PlayerBrain* brain)
 		}
 	}
 }
+
+int AiPedCount = 0;
+int AiAppCount = 0;
 void PlayerZerosAI()
 {
-	if (PlayerZinSesh(true) > MySettings.MaxPlayers)
+	if (PlayerZinSesh() > MySettings.MaxPlayers)
 	{
-		if ((int)AFKList.size() > 0)
-			AFKList[0].TimeOn = 0;
-		else if ((int)PedList.size() > 0)
-			PedList[0].TimeOn = 0;
+		if ((int)AFKList.size() > 1)
+		{
+			if (AFKList[0].TheHacker)
+				AFKList[1].TimeOn = 0;
+			else
+				AFKList[0].TimeOn = 0;
+
+		}
+		else if ((int)PedList.size() > 1)
+		{
+			if (PedList[0].TheHacker)
+				PedList[1].TimeOn = 0;
+			else
+				PedList[0].TimeOn = 0;
+
+		}
 	}
 	
 	if ((int)PedList.size() > 0)
 	{
-		if (iNpcList < (int)PedList.size())
+		if (AiPedCount < (int)PedList.size())
 		{
-			if (PedList[iNpcList].TimeToGo)
-				PedList.erase(PedList.begin() + iNpcList);
+			if (PedList[AiPedCount].TimeToGo)
+				PedList.erase(PedList.begin() + AiPedCount);
 			else
-				ProcessPZ(&PedList[iNpcList]);
-			iNpcList++;
+				ProcessPZ(&PedList[AiPedCount]);
+			AiPedCount++;
 		}
 		else
-			iNpcList = 0;
+			AiPedCount = 0;
 	}
 
 	if ((int)AFKList.size() > 0)
 	{
-		if (iBlpList < (int)AFKList.size())
+		if (AiAppCount < (int)AFKList.size())
 		{
-			if (AFKList[iBlpList].TimeOn < InGameTime())
+			if (AFKList[AiAppCount].TimeOn < InGameTime())
 			{
-				if ((bool)UI::DOES_BLIP_EXIST(AFKList[iBlpList].ThisBlip))
-					UI::REMOVE_BLIP(&AFKList[iBlpList].ThisBlip);
+				if ((bool)UI::DOES_BLIP_EXIST(AFKList[AiAppCount].ThisBlip))
+					UI::REMOVE_BLIP(&AFKList[AiAppCount].ThisBlip);
 
-				BottomLeft("~h~" + AFKList[iBlpList].MyName + "~s~ left");
-				AFKList.erase(AFKList.begin() + iBlpList);
+				if (!AFKList[AiAppCount].MoveToOpen)
+					GVM::BottomLeft("~h~" + AFKList[AiAppCount].MyName + "~s~ left");
+				AFKList.erase(AFKList.begin() + AiAppCount);
 			}
 			else if (MySettings.BackChat)
-				ProcessAfk(&AFKList[iBlpList]);
-			iBlpList++;
+				ProcessAfk(&AFKList[AiAppCount]);
+			AiAppCount++;
 		}
 		else
-			iBlpList = 0;
+			AiAppCount = 0;
 	}
 
-	if (!BypassAll)
+	if (!ClosedSession)
 	{
-		if (!MySettings.InviteOnly)
-		{
-			if (iNextPlayer < InGameTime() && PlayerZinSesh(true) < MySettings.MaxPlayers)
-				NewPlayer();
-		}
+		if (!MySettings.InviteOnly && NewPedTime < InGameTime() && PlayerZinSesh() < MySettings.MaxPlayers)
+			NewPlayer();
 	}
 }
-int Scaleform_PLAYER_LIST()
+
+int FindKeyBinds(bool Control)
 {
-	LoggerLight("Scaleform_PLAYER_LIST");
+	WAIT(4000);
+	int iReturn = -1;
+	int TestCase = 0;
 
-	int iList = GRAPHICS::REQUEST_SCALEFORM_MOVIE("INSTRUCTIONAL_BUTTONS");
+	while (true)
+	{
+		if (PlayDead)
+			break;
 
-	while (!GRAPHICS::HAS_SCALEFORM_MOVIE_LOADED(iList))
+		GVM::TopLeft(PZTranslate[10]);
+
+		if (Control)
+		{
+			if (TestCase < (int)ControlSym.size())
+			{
+				if (GVM::ButtonDown(TestCase))
+				{
+					GVM::BottomLeft(PZTranslate[11]);
+					iReturn = TestCase;
+					break;
+				}
+				TestCase++;
+			}
+			else
+				TestCase = 0;
+		}
+		else
+		{
+			if (TestCase < (int)KeyFind.size())
+			{
+				if (IsKeyDown(KeyFind[TestCase]))
+				{
+					GVM::BottomLeft(PZTranslate[11]);
+					iReturn = TestCase;
+					break;
+				}
+				TestCase++;
+			}
+			else
+				TestCase = 0;
+		}
 		WAIT(1);
-
-	GRAPHICS::CALL_SCALEFORM_MOVIE_METHOD(iList, "CLEAR_ALL");//Was---_CALL_SCALEFORM_MOVIE_FUNCTION_VOID
-	GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(iList, "TOGGLE_MOUSE_BUTTONS");
-	GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_BOOL(0);
-	GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-
-	GRAPHICS::CALL_SCALEFORM_MOVIE_METHOD(iList, "CREATE_CONTAINER");//Was---_CALL_SCALEFORM_MOVIE_FUNCTION_VOID
-	int iAddOns = 0;
-
-	for (int i = 0; i < PedList.size(); i++)
-	{
-		int iFailed = 0;
-		string sPlayer = PedList[i].MyName;
-		while (sPlayer.size() < 14 && iFailed < 10)
-		{
-			sPlayer = sPlayer + " ";
-			WAIT(1);
-			iFailed += 1;
-		}
-		sPlayer = sPlayer + std::to_string(PedList[i].Level);
-
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(iList, "SET_DATA_SLOT");
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(iAddOns);
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_STRING((LPSTR)sPlayer.c_str());
-		GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-		iAddOns += 1;
 	}
-	for (int i = 0; i < AFKList.size(); i++)
-	{
-		int iFailed = 0;
-		string sPlayer = AFKList[i].MyName;
-		while (sPlayer.size() < 14 && iFailed < 10)
-		{
-			sPlayer = sPlayer + " ";
-			WAIT(1);
-			iFailed += 1;
-		}
-		sPlayer = sPlayer + std::to_string(AFKList[i].Level);
-
-
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(iList, "SET_DATA_SLOT");
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(iAddOns);
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_STRING((LPSTR)sPlayer.c_str());
-		GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-		iAddOns += 1;
-	}
-
-	GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(iList, "SET_DATA_SLOT");
-	GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(iAddOns);
-
-	if (MySettings.InviteOnly)
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_STRING("Mod Disabled");
-	else
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_STRING("Players in Session ;  ");
-
-	GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-
-	GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(iList, "DRAW_INSTRUCTIONAL_BUTTONS");
-	GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(1);
-	GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-
-	iDisplay = InGameTime() + 8000;
-	TopLeft(PZLang[91] + ControlSym[MySettings.Control_Open] + PZLang[92]);
-}
-void ScanArea()
-{
-	if (MakeFrenz.size() > 0)
-	{
-		Vector4 Frend = FindPedSpPoint(FindPedSpPoint(InAreaOf(PlayerPosi(), 35.0f, 50.0f)));
-
-		PedList.push_back(MakeFrenz[MakeFrenz.size() - 1].Brains);
-		PlayerPedGen(Frend, &PedList[PedList.size() - 1]);
-		MakeFrenz.pop_back();
-		LoggerLight("MakeFrenz Count == " + std::to_string((int)MakeFrenz.size()));
-	}
-
-	if (MakeCarz.size() > 0)
-	{
-		Vector4 Carz = FindVehSpPoint(FindPedSpPoint(InAreaOf(PlayerPosi(), 45.0f, 90.0f)));
-
-		PedList.push_back(MakeCarz[MakeCarz.size() - 1].Brains);
-		SpawnVehicle(MakeCarz[MakeCarz.size() - 1].Brains.PrefredVehicle, Carz, MakeCarz[MakeCarz.size() - 1].AddPlayer, &PedList[PedList.size() - 1], false, MakeCarz[MakeCarz.size() - 1].CanFill);
-		MakeCarz.pop_back();
-	}
-}
-
-void HaCK001(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			if (PedList[iPedLocate].ThisPed != NULL)
-			{
-				Vector3 LandHere = FowardOf(PLAYER::PLAYER_PED_ID(), 5, true);
-				MoveEntity(PedList[iPedLocate].ThisPed, LandHere);
-			}
-		}
-		else
-		{
-			Vector3 LandHere = FowardOf(PLAYER::PLAYER_PED_ID(), 5, true);
-			ClothBank MB = NewClothBank();
-			int iNat = RandomInt(1, 5);
-			int iGetGunnin = YourGunNum();
-			PlayerBrain newBrain = PlayerBrain(AFKList[iPedLocate].MyName, AFKList[iPedLocate].MyIdentity, MB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), AFKList[iPedLocate].Level, false, iNat, iGetGunnin, 0);
-			PedList.push_back(newBrain);
-			PlayerPedGen(Vector4(LandHere.x, LandHere.y, LandHere.z, 0.0), &PedList[PedList.size() - 1]);
-			AFKList.erase(AFKList.begin() + iPedLocate);
-		}
-	}
-}
-void HaCK002(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			if (PedList[iPedLocate].ThisPed != NULL)
-			{
-				FIRE::START_ENTITY_FIRE(PedList[iPedLocate].ThisPed);
-
-				FightPlayer(&PedList[iPedLocate]);
-			}
-		}
-		else
-		{
-			BottomLeft(AFKList[iPedLocate].MyName + " " + PZLang[81]);
-			AFKList[iPedLocate].TimeOn = 0;
-		}
-	}
-}
-void HaCK003(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			PedList[iPedLocate].TimeOn = 0;
-		}
-		else
-		{
-			AFKList[iPedLocate].TimeOn = 0;
-		}
-	}
-}
-void HaCK004(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			if (PedList[iPedLocate].ThisPed != NULL)
-			{
-				Vector3 Above = ENTITY::GET_ENTITY_COORDS(PedList[iPedLocate].ThisPed, true);
-				Above.z += 25.0;
-				DropObjects(Above);
-			}
-		}
-		else
-		{
-
-		}
-	}
-}
-void HaCK005(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			if (PedList[iPedLocate].ThisPed != NULL)
-			{
-				FireOrb(PedList[iPedLocate].MyIdentity, PedList[iPedLocate].ThisPed, true);
-
-				FightPlayer(&PedList[iPedLocate]);
-			}
-		}
-		else
-		{
-
-		}
-	}
-}
-void HaCK006(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-	int iAmPig = BackOffPig();
-	Ped ThePlayer = PLAYER::PLAYER_PED_ID();
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			if (PedList[iPedLocate].ThisPed != NULL)
-			{
-				if (iPedLocate == iAmPig)
-				{
-					ENTITY::DETACH_ENTITY(ThePlayer, 0, 0);
-					AI::CLEAR_PED_TASKS_IMMEDIATELY(ThePlayer);
-					PedList[iAmPig].PiggyBackin = false;
-				}
-				else
-				{
-					if (iAmPig != -1)
-					{
-						ENTITY::DETACH_ENTITY(ThePlayer, 0, 0);
-						AI::CLEAR_PED_TASKS_IMMEDIATELY(ThePlayer);
-						PedList[iAmPig].PiggyBackin = false;
-					}
-
-					ForceAnim(ThePlayer, "amb@code_human_in_bus_passenger_idles@female@sit@idle_a", "idle_a", PlayerPosi(), NewVector3(0.0, 0.0, 0.0));
-					ENTITY::ATTACH_ENTITY_TO_ENTITY(ThePlayer, PedList[iPedLocate].ThisPed, 31086, 0.10, 0.15, 0.61, 0.00, 0.00, 180.00, 0, 0, 0, 0, 2, 1);
-					PedList[iPedLocate].PiggyBackin = true;
-				}
-			}
-		}
-		else
-		{
-			if (iAmPig != -1)
-			{
-				ENTITY::DETACH_ENTITY(ThePlayer, 0, 0);
-				AI::CLEAR_PED_TASKS_IMMEDIATELY(ThePlayer);
-				PedList[iAmPig].PiggyBackin = false;
-			}
-
-			Vector3 LandHere = FowardOf(ThePlayer, 5, true);
-			ClothBank MB = NewClothBank();
-			int iGetGunnin = YourGunNum();
-			PlayerBrain newBrain = PlayerBrain(AFKList[iPedLocate].MyName, AFKList[iPedLocate].MyIdentity, MB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), AFKList[iPedLocate].Level, false, AFKList[iPedLocate].Nationality, iGetGunnin, 0);
-			newBrain.PiggyBackin = true;
-			PedList.push_back(newBrain);
-			Ped Bob = PlayerPedGen(Vector4(LandHere.x, LandHere.y, LandHere.z, 0.0), &PedList[PedList.size() -1]);
-			AFKList.erase(AFKList.begin() + iPedLocate);
-			ForceAnim(ThePlayer, "amb@code_human_in_bus_passenger_idles@female@sit@idle_a", "idle_a", PlayerPosi(), NewVector3(0.0, 0.0, 0.0));
-			ENTITY::ATTACH_ENTITY_TO_ENTITY(ThePlayer, Bob, 31086, 0.10, 0.15, 0.61, 0.00, 0.00, 180.00, 0, 0, 0, 0, 2, 1);
-		}
-	}
-}
-void HaCK007(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			DropMoneys = true;
-			if (PedList[iPedLocate].ThisPed != NULL)
-				MoneyDrops.push_back(MoneyBags(PedList[iPedLocate].ThisPed, PedList[iPedLocate].MyIdentity, InGameTime() + 5000));
-		}
-		else
-		{
-
-		}
-	}
-}
-void HaCK008(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			PedList[iPedLocate].ThisBlip = PedBlimp(PedList[iPedLocate].ThisBlip, PedList[iPedLocate].ThisPed, 303, PedList[iPedLocate].MyName, 1, false);
-			PedList[iPedLocate].Bounty = true;
-		}
-		else
-		{
-			AFKList[iPedLocate].ThisBlip = LocalBlip(AFKList[iPedLocate].ThisBlip, AFKPlayers[AFKList[iPedLocate].App], 303, AFKList[iPedLocate].MyName, 1);
-		}
-	}
-}
-void HaCK009(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			if (PedList[iPedLocate].ThisVeh != NULL && PedList[iPedLocate].ThisPed != NULL)
-				GetOutVehicle(PedList[iPedLocate].ThisPed);
-		}
-		else
-		{
-
-		}
-	}
-}
-void HaCK010(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			GetOutVehicle(PLAYER::PLAYER_PED_ID());
-
-			if (PedList[iPedLocate].ThisVeh != NULL)
-				GetInVehicle(PLAYER::PLAYER_PED_ID(), PedList[iPedLocate].ThisVeh, 0, true);
-		}
-		else
-		{
-
-		}
-	}
-}
-void HaCK011(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			if (PedList[iPedLocate].XmasTree != NULL)
-			{
-				ENTITY::DELETE_ENTITY(&PedList[iPedLocate].XmasTree);
-				PedList[iPedLocate].XmasTree = NULL;
-			}
-			else if (PedList[iPedLocate].ThisPed != NULL)
-			{
-				Vector3 Vme = ENTITY::GET_ENTITY_COORDS(PedList[iPedLocate].ThisPed, 0);
-				PedList[iPedLocate].XmasTree = BuildProps("prop_xmas_tree_int", Vme, NewVector3(0.0, 90.0, 0.0), false, false);
-				ENTITY::SET_ENTITY_COLLISION(PedList[iPedLocate].XmasTree, false, false);
-				ENTITY::ATTACH_ENTITY_TO_ENTITY(PedList[iPedLocate].XmasTree, PedList[iPedLocate].ThisPed, PED::GET_PED_BONE_INDEX(PedList[iPedLocate].ThisPed, 24818), 0.0, 0.0, 0.0, 0.0, 90.0, 0.0, 0, 0, 0, 1, 2, 1);
-			}
-		}
-		else
-		{
-
-		}
-	}
-}
-void HaCK012(string ThisPed)
-{
-	bool bRain = true;
-	int iPedLocate = ReteaveBrain(ThisPed);
-
-	if (iPedLocate == -1)
-	{
-		bRain = false;
-		iPedLocate = ReteaveAfk(ThisPed);
-	}
-
-	if (iPedLocate != -1)
-	{
-		if (bRain)
-		{
-			if (PedList[iPedLocate].ThisPed != NULL)
-			{
-				PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(PedList[iPedLocate].ThisPed, true);
-				PedList[iPedLocate].EWO = true;
-				EasyWayOut(PedList[iPedLocate].ThisPed);
-
-				FightPlayer(&PedList[iPedLocate]);
-			}
-		}
-		else
-		{
-			BottomLeft(AFKList[iPedLocate].MyName + PZLang[99]);
-			AFKList[iPedLocate].TimeOn = 0;
-		}
-	}
+	return iReturn;
 }
 
 bool NotWanted = false;
-vector<PZclass::PhoneContact*> YourFriends = {};
 
-void BurnPlayers()
+void PartyContactCall(PhoneContact* contact, Vector4 local)
 {
-	for (int i = 0; i < (int)PedList.size(); i++)
+	LoggerLight("PartyContactCall");
+	if (contact != nullptr)
 	{
-		if (!PedList[i].Follower)
-			HaCK002(PedList[i].MyIdentity);
-		if (DistanceTo(PedList[i].ThisPed, PLAYER::PLAYER_PED_ID()) > 70.0)
-			ENTITY::SET_ENTITY_HEALTH(PedList[i].ThisPed, 0);
-	}
+		if (FileExists(contact->ConMobileAdd))
+			FileRemoval(contact->ConMobileAdd);
 
-	for (int i = 0; i < (int)AFKList.size(); i++)
-	{
-		BottomLeft("~h~" + AFKList[i].MyName + "~s~ " + PZLang[81]);
-		AFKList[i].TimeOn = 0;
-	}
-}
-void CashFlow()
-{
-	for (int i = 0; i < (int)PedList.size(); i++)
-		HaCK007(PedList[i].MyIdentity);
-}
-void GetingOffHere()
-{
-	for (int i = 0; i < (int)PedList.size(); i++)
-	{
-		if (PedList[i].ThisPed != NULL)
-			GetOutVehicle(PedList[i].ThisPed);
-	}
-}
-void HaCKThiSPeD(string ThisPed, string name, bool vHick, bool InVick, bool InApp)
-{
-	int MyPick = -1;
-	if (InApp)
-	{
-		MyPick = MyMenuSys(PZLang[61], vector<string>{ PZLang[69], PZLang[70], PZLang[71], PZLang[72], PZLang[74] });
-		if (MyPick == 0)
-			HaCK001(ThisPed);//"Bring Player to Self",
-		else if (MyPick == 1)
-			HaCK002(ThisPed);//"Burn Player",
-		else if (MyPick == 2)
-			HaCK003(ThisPed);//"Crash Player",
-		else if (MyPick == 3)
-			HaCK008(ThisPed);//"Add Bounty to Player",
-		else if (MyPick == 4)
-			HaCK012(ThisPed);//"EWO",
-	}
-	else if (vHick)
-	{
-		MyPick = MyMenuSys(PZLang[61], vector<string>{ PZLang[69], PZLang[70], PZLang[71], PZLang[72], PZLang[73], PZLang[75], PZLang[76], PZLang[77], PZLang[74] });
-		if (MyPick == 0)
-			HaCK001(ThisPed);//"Bring Player to Self",
-		else if (MyPick == 1)
-			HaCK002(ThisPed);//"Burn Player",
-		else if (MyPick == 2)
-			HaCK003(ThisPed);//"Crash Player",
-		else if (MyPick == 3)
-			HaCK008(ThisPed);//"Add Bounty to Player",
-		else if (MyPick == 4)
-			HaCK004(ThisPed);//"Drop Objects On Player",
-		else if (MyPick == 5)
-			HaCK009(ThisPed);//"Eject Player Vehicle",
-		else if (MyPick == 6)
-			HaCK010(ThisPed);//"Enter Player Vehicle",
-		else if (MyPick == 7)
-			HaCK011(ThisPed);//"Add Christmas Tree",
-		else if (MyPick == 8)
-			HaCK012(ThisPed);//"EWO",
-	}
-	else if (InVick)
-	{
-		MyPick = MyMenuSys(PZLang[61], vector<string>{ PZLang[69], PZLang[70], PZLang[71], PZLang[72], PZLang[73], PZLang[75], PZLang[77], PZLang[74] });
-		if (MyPick == 0)
-			HaCK001(ThisPed);//"Bring Player to Self",
-		else if (MyPick == 1)
-			HaCK002(ThisPed);//"Burn Player",
-		else if (MyPick == 2)
-			HaCK003(ThisPed);//"Crash Player",
-		else if (MyPick == 3)
-			HaCK008(ThisPed);//"Add Bounty to Player",
-		else if (MyPick == 4)
-			HaCK004(ThisPed);//"Drop Objects On Player",
-		else if (MyPick == 5)
-			HaCK009(ThisPed);//"Eject Player Vehicle",
-		else if (MyPick == 6)
-			HaCK011(ThisPed);//"Add Christmas Tree",
-		else if (MyPick == 7)
-			HaCK012(ThisPed);//"EWO",
-	}
-	else
-	{
-		MyPick = MyMenuSys(PZLang[61], vector<string>{ PZLang[69], PZLang[70], PZLang[71], PZLang[72], PZLang[73], PZLang[78], PZLang[79], PZLang[80], PZLang[77], PZLang[74] });
-
-		if (MyPick == 0)
-			HaCK001(ThisPed);//"Bring Player to Self",
-		else if (MyPick == 1)
-			HaCK002(ThisPed);//"Burn Player",
-		else if (MyPick == 2)
-			HaCK003(ThisPed);//"Crash Player",
-		else if (MyPick == 3)
-			HaCK008(ThisPed);//"Add Bounty to Player",
-		else if (MyPick == 4)
-			HaCK004(ThisPed);//"Drop Objects On Player",
-		else if (MyPick == 5)
-			HaCK005(ThisPed);//"Orbital Strike Player",
-		else if (MyPick == 6)
-			HaCK006(ThisPed);//"PiggyBack Player",
-		else if (MyPick == 7)
-			HaCK007(ThisPed);//"Drop Moneys on Player",
-		else if (MyPick == 8)
-			HaCK011(ThisPed);//"Add Christmas Tree",
-		else if (MyPick == 9)
-			HaCK012(ThisPed);//"EWO",
-	}
-}
-void TrollPlayMenu()
-{
-	iMenuSys = 0;
-	vector<string> PlayerZName = {};
-	vector<string> PlayerZPos = {};
-
-	for (int i = 0; i < PedList.size(); i++)
-	{
-		string sAdd = "";
-		if (PedList[i].Follower)
-			sAdd = " ("+ PZLang[68] +")";
-
-		PlayerZName.push_back(PedList[i].MyName + sAdd);
-		PlayerZPos.push_back(PedList[i].MyIdentity);
-	}
-
-	for (int i = 0; i < AFKList.size(); i++)
-	{
-		PlayerZName.push_back(AFKList[i].MyName);
-		PlayerZPos.push_back(AFKList[i].MyIdentity);
-	}
-
-	int MyPick = MyMenuSys(PZLang[61], PlayerZName);
-
-	if (MyPick < (int)PlayerZPos.size() && MyPick > -1)
-	{
-		int iPedLocate = ReteaveBrain(PlayerZPos[MyPick]);
-		if (iPedLocate != -1)
+		contact->InSession = true;
+		if (ReteaveBrain(contact->YourFriend.MyIdentity) == -1)
 		{
-			bool GotSeats = false;
-			bool InVick = PedList[iPedLocate].Passenger;
-
-			if (PedList[iPedLocate].ThisVeh != NULL)
-			{
-				if (VEHICLE::GET_VEHICLE_MAX_NUMBER_OF_PASSENGERS(PedList[iPedLocate].ThisVeh) > 0)
-					GotSeats = true;
-				else
-					InVick = true;
-			}
-			HaCKThiSPeD(PlayerZPos[MyPick], PlayerZName[MyPick], GotSeats, InVick, false);
+			contact->YourFriend.Follower = true;
+			contact->YourFriend.WanBeFriends = false;
+			contact->YourFriend.BlipColour = 38;
+			contact->YourFriend.TimeOn = (MySettings.MaxSession * 60) * 1000 + InGameTime();
+			PedList.push_back(contact->YourFriend);
+			Ped Psit = PlayerPedGen(local, &PedList[(int)PedList.size() - 1], true);
 		}
-		else
-			HaCKThiSPeD(PlayerZPos[MyPick], PlayerZName[MyPick], false, false, true);
+	}
+}
+void ConectContact(PhoneContact* contact)
+{
+	LoggerLight("ConectContact");
+	if (contact != nullptr)
+	{
+		if (FileExists(contact->ConMobileAdd))
+			FileRemoval(contact->ConMobileAdd);
+
+		contact->InSession = true;
+		if (ReteaveBrain(contact->YourFriend.MyIdentity) == -1)
+		{
+			Vector3 LandHere = FowardOf(PLAYER::PLAYER_PED_ID(), 5, true);
+			contact->YourFriend.Follower = true;
+			contact->YourFriend.WanBeFriends = false;
+			contact->YourFriend.BlipColour = 38;
+			contact->YourFriend.TimeOn = (MySettings.MaxSession * 60) * 1000 + InGameTime();
+
+			if (contact->YourFriend.PrefredVehicle != 0 && contact->YourFriend.PrefredVehicle < 8)
+			{
+				contact->YourFriend.ApprochPlayer = true;
+				contact->YourFriend.Driver = true;
+				PedList.push_back(contact->YourFriend);
+				contact->YourFriend.ThisVeh = SpawnVehicle(&PedList[(int)PedList.size() -1], true, false);
+			}
+			else
+			{
+				PedList.push_back(contact->YourFriend);
+				PlayerPedGen(FindPedSpPoint(), &PedList[(int)PedList.size() - 1], false);
+			}
+		}
 	}
 }
 bool bSnow = false;
 bool HideTrafic = false;
 
-void TrollMenu()
-{
-	iMenuSys = 1;
-	int MyPick = 0;
-
-	string sWind = PZLang[57];
-	if (WindMill != NULL)
-		sWind = PZLang[58];
-
-	string sWanted = PZLang[59];
-	if (NotWanted)
-		sWanted = PZLang[60];
-
-	string SnowBlow = PZLang[106];
-	if (ItsSnowing)
-		SnowBlow = PZLang[107];
-
-	MyPick = MyMenuSys(PZLang[61], vector<string>{ sWind, PZLang[62], PZLang[63], PZLang[64], PZLang[65], PZLang[66], sWanted, SnowBlow });
-
-	if (MyPick == 0)
-	{
-		EclipsWindMill();
-		iMenuSys = 2;
-	}
-	else if (MyPick == 1)
-	{
-		if (PlayerZinSesh(false) > 0)
-			iMenuSys = 3;
-		else
-		{
-			MyMenuSys(PZLang[61], vector<string>{ PZLang[67] });
-			iMenuSys = 2;
-		}
-	}
-	else if (MyPick == 2)
-	{
-		if (PlayerZinSesh(false) > 0)
-			BurnPlayers();
-		else
-		{
-			MyMenuSys(PZLang[61], vector<string>{ PZLang[67] });
-			iMenuSys = 2;
-		}
-	}
-	else if (MyPick == 3)
-	{
-		if (PlayerZinSesh(false) > 0)
-			CashFlow();
-		else
-		{
-			MyMenuSys(PZLang[61], vector<string>{ PZLang[67] });
-			iMenuSys = 2;
-		}
-	}
-	else if (MyPick == 4)
-	{
-		if (PlayerZinSesh(false) > 0)
-			GetingOffHere();
-		else
-		{
-			MyMenuSys(PZLang[61], vector<string>{ PZLang[67] });
-			iMenuSys = 2;
-		}
-	}
-	else if (MyPick == 5)
-	{
-		EasyWayOut(PLAYER::PLAYER_PED_ID());
-		BottomLeft(PZLang[109]);
-		iMenuSys = 0;
-	}
-	else if (MyPick == 6)
-	{
-		NotWanted = !NotWanted;
-		iMenuSys = 2;
-	}
-	else if (MyPick == 7)
-	{
-		ItsSnowing = !ItsSnowing;
-		EnableSnow(ItsSnowing);
-		WEAPON::GIVE_WEAPON_TO_PED(PLAYER::PLAYER_PED_ID(), MyHashKey("WEAPON_snowball"), 9999, false, true);
-	}
-	else if (MyPick == 8)
-	{
-		HideTrafic = !HideTrafic;
-	}
-}
-const std::vector<std::string> TranlatesTo = {
+std::vector<std::string> TranlatesTo = {
 	"English",
 	"French",
 	"German",
@@ -4816,324 +4780,1082 @@ const std::vector<std::string> TranlatesTo = {
 	"Mexican",
 	"ChineseSimplifyed"
 };
-void PlayerZeroMenu()
+
+void Pz_MenuStart();
+void Pz_Settings();
+
+void PassiveProg()
 {
-	iMenuSys = 0;
-
-	vector<int> Output;
-
-	string Invite = PZLang[2];
-	if (MySettings.InviteOnly)
-		Invite = PZLang[3];
-
-	string Notice = PZLang[4];
-	if (MySettings.NoNotify)
-		Notice = PZLang[5];
-
-	string Blipnig = PZLang[6];
-	if (MySettings.NoRadar)
-		Blipnig = PZLang[7];
-
-	string Weaps = PZLang[8];
-	if (MySettings.SpaceWeaps)
-		Weaps = PZLang[9];
-
-	string Tags = PZLang[10];
-	if (!MySettings.NameTags)
-		Tags = PZLang[11];
-
-	string Pass = PZLang[12];
-	if (!MySettings.PassiveMode)
-		Pass = PZLang[13];
-
-	string LFiend = PZLang[14];
-	if (!MySettings.FriendlyFire)
-		LFiend = PZLang[15];
-
-	string TalkinBollox = PZLang[104];
-	if (MySettings.BackChat)
-		TalkinBollox = PZLang[105];
-
-	string LLogs = PZLang[16];
-	if (!MySettings.Debugger)
-		LLogs = PZLang[17];
-
-	if (PZData::MySettings.Pz_Lang == -1)
-		PZData::MySettings.Pz_Lang = 0;
-
-	int MyPick = MyMenuSys(PZLang[18], vector<string>{ PZLang[19], PZLang[20], PZLang[21], Invite, PZLang[22], PZLang[23], PZLang[24], PZLang[25], PZLang[26], PZLang[27], Notice, Blipnig, Weaps, Tags, Pass, LFiend, TalkinBollox, LLogs, PZLang[28], TranlatesTo[PZData::MySettings.Pz_Lang]});
-
-	if (MyPick == 0)
-		iMenuSys = 2;
-	else if (MyPick == 1)
+	//if (PlayerNoZero != PLAYER::PLAYER_PED_ID())
+	//{
+	//	PlayerNoZero = PLAYER::PLAYER_PED_ID();
+	//	ENTITY::SET_ENTITY_ONLY_DAMAGED_BY_PLAYER((Entity)PLAYER::PLAYER_PED_ID(), true);
+	//}
+	for (int i = 0; i < (int)PedList.size(); i++)
 	{
-		string PC = PZLang[29];
-		if (!MySettings.MobileData)
-			PC = PZLang[30];
-
-		int Cont01 = MyMenuSys(PZLang[20], vector<string>{ PZLang[31], PZLang[32], PC });
-
-		if (Cont01 == 0)
+		Entity PlayVeh = GetPlayersVehicle();
+		if (PlayVeh != NULL)
 		{
-			vector<string> Name_List = {};
-			vector<string> Id_List = {};
-
-			for (int i = 0; i < (int)PedList.size(); i++)
+			if (PedList[i].Driver)
 			{
-				if (PedList[i].Follower && !PedList[i].IsInContacts)
+				if (PedList[i].ThisVeh != NULL)
 				{
-					Name_List.push_back(PedList[i].MyName);
-					Id_List.push_back(PedList[i].MyIdentity);
+					ENTITY::SET_ENTITY_NO_COLLISION_ENTITY(PlayVeh, (Entity)PedList[i].ThisVeh, 1);
+					ENTITY::SET_ENTITY_NO_COLLISION_ENTITY((Entity)PedList[i].ThisVeh, PlayVeh, 1);
 				}
 			}
-			if ((int)Name_List.size() > 0)
+			else if (PedList[i].ThisPed != NULL)
 			{
-				int Cont02 = MyMenuSys(PZLang[20], Name_List);
-
-				if (Cont02 > -1 && Cont02 < (int)Name_List.size())
-				{
-					int iNewCon = ReteaveBrain(Id_List[Cont02]);
-					if (iNewCon != -1)
-					{
-						PedList[iNewCon].IsInContacts = true;
-						SaveContacts(PhoneContact(Name_List[Cont02], PedList[iNewCon]));
-					}
-					iMenuSys = 1;
-				}
-			}
-			else
-			{
-				int Cont02 = MyMenuSys(PZLang[20], vector<string>{ PZLang[33] });
-				iMenuSys = 1;
-			}
-		}
-		else if (Cont01 == 1)
-		{
-			vector<string> Name_List = {};
-			vector<string> Id_List = {};
-
-			for (int i = 0; i < (int)PhoneContacts.size(); i++)
-			{
-				if (!PlayerOnline(PhoneContacts[i].YourFriend.MyIdentity))
-				{
-					Name_List.push_back(PhoneContacts[i].YourFriend.MyName);
-					Id_List.push_back(PhoneContacts[i].YourFriend.MyIdentity);
-				}
-			}
-
-			if ((int)Name_List.size() > 0)
-			{
-				int Cont02 = MyMenuSys(PZLang[20], Name_List);
-
-				if (Cont02 > -1 && Cont02 < (int)Id_List.size())
-				{
-					int Cont03 = MyMenuSys(Name_List[Cont02], vector<string>{PZLang[34], PZLang[35]});
-					if (Cont03 == 0)
-					{
-						int Id = RetreaveCont(Id_List[Cont02]);
-						if (Id != -1 && Id < PhoneContacts.size())
-							ContactInSession(&PhoneContacts[Id]);
-					}
-					else if (Cont03 == 1)
-					{
-						if (Cont02 < (int)PhoneContacts.size() && Cont02 > -1)
-						{
-							FileRemoval(GetDir() + "/PlayerZero/Contacts/" + PhoneContacts[Cont02].Name + ".ini");
-							PhoneContacts.erase(PhoneContacts.begin() + Cont02);
-						}
-					}
-				}
-			}
-			else
-			{
-				int Cont02 = MyMenuSys(PZLang[20], vector<string>{ PZLang[36] });
-				iMenuSys = 1;
+				ENTITY::SET_ENTITY_NO_COLLISION_ENTITY(PlayVeh, (Entity)PedList[i].ThisPed, 1);
+				ENTITY::SET_ENTITY_NO_COLLISION_ENTITY((Entity)PedList[i].ThisPed, PlayVeh, 1);
 			}
 		}
 		else
 		{
-			MySettings.MobileData = !MySettings.MobileData;
-			iMenuSys = 1;
-		}
-	}
-	else if (MyPick == 2)
-	{
-		KeepFrieands = false;
-		LaggOut(KeepFrieands);//ClearSession
-	}
-	else if (MyPick == 3)
-	{
-		if (!BypassAll)
-		{
-			KeepFrieands = true;
-			MySettings.InviteOnly = !MySettings.InviteOnly;
-			LaggOut(KeepFrieands);
-		}
-	}
-	else if (MyPick == 4)
-	{
-		Output = MyMenuSysPlus(PZLang[37], vector<MenuNumbers>{ MenuNumbers(PZLang[38], 0, 11, MySettings.Aggression) });
-
-		MySettings.Aggression = Output[0];
-
-		if (MySettings.Aggression > 4)
-		{
-			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Player, GP_Attack);
-			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Attack, GP_Player);
-		}
-		else
-		{
-			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(3, GP_Player, GP_Attack);
-			PED::SET_RELATIONSHIP_BETWEEN_GROUPS(3, GP_Attack, GP_Player);
-		}
-
-		iMenuSys = 1;
-	}
-	else if (MyPick == 5)
-	{
-		Output = MyMenuSysPlus(PZLang[39], vector<MenuNumbers>{ MenuNumbers(PZLang[40], 5, 30, MySettings.MaxPlayers) });
-
-		MySettings.MaxPlayers = Output[0];
-		iMenuSys = 1;
-	}
-	else if (MyPick == 6)
-	{
-		Output = MyMenuSysPlus(PZLang[41], vector<MenuNumbers>{ MenuNumbers(PZLang[42], 0, MySettings.MaxWait, MySettings.MinWait), MenuNumbers(PZLang[43], MySettings.MinWait, 3600, MySettings.MaxWait) });
-		MySettings.MinWait = Output[0];
-		MySettings.MaxWait = Output[1];
-		iMenuSys = 1;
-	}
-	else if (MyPick == 7)
-	{
-		Output = MyMenuSysPlus(PZLang[44], vector<MenuNumbers>{ MenuNumbers(PZLang[42], 10, MySettings.MaxSession, MySettings.MinSession), MenuNumbers(PZLang[43], MySettings.MinSession, 7200, MySettings.MaxSession) }), vector<int> {MySettings.MinSession, MySettings.MaxSession};
-		MySettings.MinSession = Output[0];
-		MySettings.MaxSession = Output[1];
-		iMenuSys = 1;
-	}
-	else if (MyPick == 8)
-	{
-		Output = MyMenuSysPlus(PZLang[45], vector<MenuNumbers>{ MenuNumbers(PZLang[46], 0, MySettings.AccMax, MySettings.AccMin), MenuNumbers(PZLang[47], MySettings.AccMin, 100, MySettings.AccMax) });
-		MySettings.AccMin = Output[0];
-		MySettings.AccMax = Output[1];
-		iMenuSys = 1;
-	}
-	else if (MyPick == 9)
-	{
-		Output = MyMenuSysPlus(PZLang[48], vector<MenuNumbers>{ MenuNumbers(PZLang[49], 0, MySettings.MaxPlayers, MySettings.AirVeh) });
-		MySettings.AirVeh = Output[0];
-		iMenuSys = 1;
-	}
-	else if (MyPick == 10)
-	{
-		MySettings.NoNotify = !MySettings.NoNotify;
-		iMenuSys = 1;
-	}
-	else if (MyPick == 11)
-	{
-		MySettings.NoRadar = !MySettings.NoRadar;
-		iMenuSys = 1;
-	}
-	else if (MyPick == 12)
-	{
-		MySettings.SpaceWeaps = !MySettings.SpaceWeaps;
-		iMenuSys = 1;
-	}
-	else if (MyPick == 13)
-	{
-		MySettings.NameTags = !MySettings.NameTags;
-		iMenuSys = 1;
-	}
-	else if (MyPick == 14)
-	{
-		MySettings.PassiveMode = !MySettings.PassiveMode;
-		iMenuSys = 1;
-	}
-	else if (MyPick == 15)
-	{
-		MySettings.FriendlyFire = !MySettings.FriendlyFire;
-		SetRelationType(MySettings.FriendlyFire);
-		iMenuSys = 1;
-	}
-	else if (MyPick == 16)
-	{
-		MySettings.BackChat = !MySettings.BackChat;
-		iMenuSys = 1;
-	}
-	else if (MyPick == 17)
-	{
-		MySettings.Debugger = !MySettings.Debugger;
-		iMenuSys = 1;
-	}
-	else if (MyPick == 18)
-	{
-		int iRun = MyMenuSys(PZLang[50], vector<string>{ PZLang[53], PZLang[54] });
-		if (iRun == 0)
-		{
-			int iCont = MyMenuSys(PZLang[50], vector<string>{ PZLang[51], PZLang[52], PZLang[55], PZLang[56] });
-			if (iCont == 0)
+			if (PedList[i].Driver)
 			{
-				PZData::MySettings.Control_Players = FindKeyBinds(true);
+				if (PedList[i].ThisVeh != NULL)
+				{
+					ENTITY::SET_ENTITY_NO_COLLISION_ENTITY((Entity)PLAYER::PLAYER_PED_ID(), (Entity)PedList[i].ThisVeh, 1);
+					ENTITY::SET_ENTITY_NO_COLLISION_ENTITY((Entity)PedList[i].ThisVeh, (Entity)PLAYER::PLAYER_PED_ID(), 1);
+				}
 			}
-			else if (iCont == 1)
+			else if (PedList[i].ThisPed != NULL)
 			{
-				PZData::MySettings.Control_Open = FindKeyBinds(true);
-			}
-			else if (iCont == 2)
-			{
-				PZData::MySettings.Control_A_Clear = FindKeyBinds(true);
-				PZData::MySettings.Control_B_Clear = FindKeyBinds(true);
-			}
-			else if (iCont == 3)
-			{
-				PZData::MySettings.Control_A_Invite = FindKeyBinds(true);
-				PZData::MySettings.Control_B_Invite = FindKeyBinds(true);
-			}
-		}
-		else if (iRun == 1)
-		{
-			int iKeyed = MyMenuSys(PZLang[50], vector<string>{ PZLang[51], PZLang[52], PZLang[55], PZLang[56] });
-			if (iKeyed == 0)
-			{
-				PZData::MySettings.Keys_Players = FindKeyBinds(false);
-			}
-			else if (iKeyed == 1)
-			{
-				PZData::MySettings.Keys_Open = FindKeyBinds(false);
-			}
-			else if (iKeyed == 2)
-			{
-				PZData::MySettings.Keys_Clear = FindKeyBinds(false);
-			}
-			else if (iKeyed == 3)
-			{
-				PZData::MySettings.Keys_Invite = FindKeyBinds(false);
+				ENTITY::SET_ENTITY_NO_COLLISION_ENTITY((Entity)PLAYER::PLAYER_PED_ID(), (Entity)PedList[i].ThisPed, 1);
+				ENTITY::SET_ENTITY_NO_COLLISION_ENTITY((Entity)PedList[i].ThisPed, (Entity)PLAYER::PLAYER_PED_ID(), 1);
 			}
 		}
 	}
-	else if (MyPick == 19)
-	{
-		PZData::MySettings.Pz_Lang = MyMenuSys(TranlatesTo[PZData::MySettings.Pz_Lang], TranlatesTo);
-		LoadLang();
-		iMenuSys = 1;
-	}
-	
-	ReBuildIni(&MySettings);
 }
-void MenuLoops()
+void PasiveModeSitch()
 {
-	while (true)
+	if (InPasiveMode)
 	{
-		if (iMenuSys == 1)
-			PlayerZeroMenu();
-		else if (iMenuSys == 2)
-			TrollMenu();
-		else if (iMenuSys == 3)
-			TrollPlayMenu();
-		else
-			break;
-		WAIT(1);
+		if (!MySettings.PassiveMode)
+		{
+			SetRelationType(MySettings.FriendlyFire);
+			PLAYER::DISABLE_PLAYER_FIRING(PLAYER::PLAYER_ID(), false);
+			InPasiveMode = false;
+		}
 	}
-	bMenuOpen = false;
+	else
+	{
+		if (MySettings.PassiveMode)
+		{
+			PassiveDontShoot();
+			PLAYER::DISABLE_PLAYER_FIRING(PLAYER::PLAYER_ID(), true);
+			InPasiveMode = true;
+		}
+	}
+	ReBuildIni();
+}
+void FriendlyFireSwitch()
+{
+	SetRelationType(MySettings.FriendlyFire);
+}
+void AggressionChange()
+{
+	if (MySettings.Aggression > 4)
+	{
+		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Player, GP_Attack);
+		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(5, GP_Attack, GP_Player);
+	}
+	else
+	{
+		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(3, GP_Player, GP_Attack);
+		PED::SET_RELATIONSHIP_BETWEEN_GROUPS(3, GP_Attack, GP_Player);
+	}
+}
+void ChangeWaitTime(int iTim)
+{
+	if (iTim == 9)
+	{
+		if (MySettings.MaxPlayers < MySettings.AirVeh)
+			MySettings.AirVeh = MySettings.MaxPlayers;
+		Pz_MenuList[(int)Pz_MenuList.size() - 1].Menu_Form[iTim + 1].Max = MySettings.MaxPlayers;
+	}
+	else if (iTim == 11)
+		Pz_MenuList[(int)Pz_MenuList.size() - 1].Menu_Form[iTim + 1].Min = MySettings.MinWait;
+	else if (iTim == 12)
+		Pz_MenuList[(int)Pz_MenuList.size() - 1].Menu_Form[iTim - 1].Max = MySettings.MaxWait;
+	else if (iTim == 13)
+		Pz_MenuList[(int)Pz_MenuList.size() - 1].Menu_Form[iTim + 1].Min = MySettings.MinSession;
+	else if (iTim == 14)
+		Pz_MenuList[(int)Pz_MenuList.size() - 1].Menu_Form[iTim - 1].Max = MySettings.MaxSession;
+	else if (iTim == 15)
+		Pz_MenuList[(int)Pz_MenuList.size() - 1].Menu_Form[iTim + 1].Min = MySettings.AccMin;
+	else if (iTim == 16)
+		Pz_MenuList[(int)Pz_MenuList.size() - 1].Menu_Form[iTim - 1].Max = MySettings.AccMax;
+}
+void MeunLaggOut()
+{
+	WAIT(1000);
+	Pz_MenuList.clear();
+	LaggOut(false);
+}
+void KeysBound(int index)
+{
+	if (Pz_MenuList.size() > 0)
+		Pz_MenuList.pop_back();
+
+	if (index == 0)
+		MySettings.Keys_Open_Menu = FindKeyBinds(false);
+	else if (index == 1)
+		MySettings.Keys_Clear_Session = FindKeyBinds(false);
+	else if (index == 2)
+		MySettings.Keys_Invite_Only = FindKeyBinds(false);
+}
+void Pz_KeyBindsKeys()
+{
+	if (Pz_MenuList.size() > 0)
+		Pz_MenuList.pop_back();
+
+	std::vector<GVM::GVMFields> PzMenuz = {
+		GVM::GVMFields(PZTranslate[158], "", &KeysBound),
+		GVM::GVMFields(PZTranslate[159], "", &KeysBound),
+		GVM::GVMFields(PZTranslate[160], "", &KeysBound)
+	};
+	GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[148] + "--", PzMenuz);
+	Pz_MenuList.push_back(MyMenu);
+}
+void ControlsBound(int index)
+{
+	if (Pz_MenuList.size() > 0)
+		Pz_MenuList.pop_back();
+
+	if (index == 0)
+	{
+		MySettings.Control_A_Open_Menu = FindKeyBinds(true);
+		MySettings.Control_B_Open_Menu = FindKeyBinds(true);
+	}
+	else if (index == 1)
+	{
+		MySettings.Control_A_Clear_Session = FindKeyBinds(true);
+		MySettings.Control_B_Clear_Session = FindKeyBinds(true);
+	}
+	else if (index == 2)
+	{
+		MySettings.Control_A_Invite_Only = FindKeyBinds(true);
+		MySettings.Control_B_Invite_Only = FindKeyBinds(true);
+	}
+}
+void Pz_KeyBindsControl(int index)
+{
+	if (Pz_MenuList.size() > 0)
+		Pz_MenuList.pop_back();
+
+	std::vector<GVM::GVMFields> PzMenuz = {
+		GVM::GVMFields(PZTranslate[158], "", &ControlsBound),
+		GVM::GVMFields(PZTranslate[159], "", &ControlsBound),
+		GVM::GVMFields(PZTranslate[160], "", &ControlsBound)
+	};
+	GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[146] + "--", PzMenuz);
+	Pz_MenuList.push_back(MyMenu);
+}
+void MultiControls(int index)
+{
+	if (Pz_MenuList.size() > 0)
+		Pz_MenuList.pop_back();
+
+	if (index == 2)
+		MySettings.Control_Keys_Players_List = FindKeyBinds(true);
+	else if (index == 3)
+		MySettings.Control_Keys_AddPed = FindKeyBinds(true);
+	else if (index == 4)
+		MySettings.Control_Keys_DissmisPed = FindKeyBinds(true);
+	else if (index == 5)
+		MySettings.Control_Keys_EnterVeh = FindKeyBinds(true);
+}
+void Pz_KeyBinds()
+{
+	std::vector<GVM::GVMFields> PzMenuz = {
+		GVM::GVMFields(PZTranslate[146], PZTranslate[147], &Pz_KeyBindsControl),
+		GVM::GVMFields(PZTranslate[148], PZTranslate[149], &Pz_KeyBindsKeys),
+		GVM::GVMFields(PZTranslate[150], PZTranslate[151], &MultiControls),
+		GVM::GVMFields(PZTranslate[152], PZTranslate[153], &MultiControls),
+		GVM::GVMFields(PZTranslate[154], PZTranslate[155], &MultiControls),
+		GVM::GVMFields(PZTranslate[156], PZTranslate[157], &MultiControls)
+	};
+	GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[143] + "--", PzMenuz);
+	Pz_MenuList.push_back(MyMenu);
+}
+void SwapLanguage()
+{
+	LoadLang(MySettings.Pz_Lang);
+	Pz_MenuList.clear();
+	Pz_MenuStart();
+	Pz_Settings();
+}
+void SwapingMenuSides()
+{
+	LoggerLight("SwapingMenuSides, Left == " + BoolToString(MySettings.MenuLeftSide));
+	if (MySettings.MenuLeftSide)
+		GVM::DefaultRatio.MenuLeftSide();
+	else
+		GVM::DefaultRatio.MenuRightSide();
+}
+void Pz_Settings()
+{
+	std::vector<GVM::GVMFields> PzMenuz = {
+		GVM::GVMFields(PZTranslate[109], PZTranslate[110], &MySettings.Aggression, 1, 11, false, &AggressionChange, false),
+		GVM::GVMFields(PZTranslate[111], PZTranslate[112], &MySettings.NoNotify),
+		GVM::GVMFields(PZTranslate[113], PZTranslate[114], &MySettings.PlayerzBlips),
+		GVM::GVMFields(PZTranslate[115], PZTranslate[116], &MySettings.SpaceWeaps),
+		GVM::GVMFields(PZTranslate[117], PZTranslate[118], &MySettings.NameTags),
+		GVM::GVMFields(PZTranslate[119], PZTranslate[120], &MySettings.PassiveMode),
+		GVM::GVMFields(PZTranslate[121], PZTranslate[122], &MySettings.FriendlyFire, &FriendlyFireSwitch, true),
+		GVM::GVMFields(PZTranslate[123], PZTranslate[124], &MySettings.BackChat),
+		GVM::GVMFields(PZTranslate[125], PZTranslate[126], &MySettings.Debugger),
+		GVM::GVMFields(PZTranslate[127], PZTranslate[128], &MySettings.MaxPlayers, 5, 30, false, &ChangeWaitTime, true, true),
+		GVM::GVMFields(PZTranslate[129], PZTranslate[130], &MySettings.AirVeh, 0, MySettings.MaxPlayers, false),
+		GVM::GVMFields(PZTranslate[131], PZTranslate[132], &MySettings.MinWait, 1, MySettings.MaxWait, false,& ChangeWaitTime, true, true),
+		GVM::GVMFields(PZTranslate[133], PZTranslate[134], &MySettings.MaxWait, MySettings.MinWait, 240, false, &ChangeWaitTime, true, true),
+		GVM::GVMFields(PZTranslate[135], PZTranslate[136], &MySettings.MinSession, 1, MySettings.MaxSession, false, &ChangeWaitTime, true, true),
+		GVM::GVMFields(PZTranslate[137], PZTranslate[138], &MySettings.MaxSession, MySettings.MinSession, 1000, false, &ChangeWaitTime, true, true),
+		GVM::GVMFields(PZTranslate[139], PZTranslate[140], &MySettings.AccMin, 1, MySettings.AccMax, false, &ChangeWaitTime, true, true),
+		GVM::GVMFields(PZTranslate[141], PZTranslate[142], &MySettings.AccMax, MySettings.AccMin, 100, false, &ChangeWaitTime, true, true),
+		GVM::GVMFields(PZTranslate[42], PZTranslate[43], &MySettings.MenuLeftSide, &SwapingMenuSides, true),
+		GVM::GVMFields(PZTranslate[143], PZTranslate[144], &Pz_KeyBinds),
+		GVM::GVMFields(PZTranslate[145], TranlatesTo[MySettings.Pz_Lang], TranlatesTo, &MySettings.Pz_Lang, &SwapLanguage, false, false)
+	};
+	GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[36] + "--", PzMenuz, &PasiveModeSitch, true);
+	Pz_MenuList.push_back(MyMenu);
+}
+
+int iVehList = 0;
+void Pz_PickFaveVeh(void* obj, void* obj2)
+{
+	LoggerLight("ChangeFaveVeh");
+	PhoneContact* Friend = static_cast<PhoneContact*>(obj);
+	std::string* Vic = static_cast<std::string*>(obj2);
+	if (Friend != nullptr && Vic != nullptr)
+	{
+		Friend->YourFriend.FaveVehicle = *Vic;
+		Friend->YourFriend.PrefredVehicle = iVehList;
+		SaveContacts(*Friend);
+		if (Pz_MenuList.size() > 1)
+		{
+			Pz_MenuList.pop_back();
+			Pz_MenuList.pop_back();
+		}
+	}
+}
+void Pz_PickFaveVeh(int index, void* obj)
+{
+	LoggerLight("ChangeFaveVeh");
+	PhoneContact* Friend = static_cast<PhoneContact*>(obj);
+	if (Friend != nullptr)
+	{
+		iVehList = index;
+		std::vector<GVM::GVMFields> PzMenuz = {};
+		if (index == 0)
+		{
+			if (Pz_MenuList.size() > 0)
+				Pz_MenuList.pop_back();
+
+			Friend->YourFriend.FaveVehicle = "";
+			Friend->YourFriend.PrefredVehicle = 0;	
+			SaveContacts(*Friend);
+		}
+		else
+		{
+			if (index == 1)
+			{
+				for (int i = 0; i < (int)PreVeh_01.size(); i++)
+					PzMenuz.push_back(GVM::GVMFields(PreVeh_01[i], GetVehName(PreVeh_01[i]), &Pz_PickFaveVeh, obj, &PreVeh_01[i]));
+			}
+			else if (index == 2)
+			{
+				for (int i = 0; i < (int)PreVeh_02.size(); i++)
+					PzMenuz.push_back(GVM::GVMFields(PreVeh_02[i], GetVehName(PreVeh_02[i]), &Pz_PickFaveVeh, obj, &PreVeh_02[i]));
+			}
+			else if (index == 3)
+			{
+				for (int i = 0; i < (int)PreVeh_03.size(); i++)
+					PzMenuz.push_back(GVM::GVMFields(PreVeh_03[i], GetVehName(PreVeh_03[i]), &Pz_PickFaveVeh, obj, &PreVeh_03[i]));
+			}
+			else if (index == 4)
+			{
+				for (int i = 0; i < (int)PreVeh_04.size(); i++)
+					PzMenuz.push_back(GVM::GVMFields(PreVeh_04[i], GetVehName(PreVeh_04[i]), &Pz_PickFaveVeh, obj, &PreVeh_04[i]));
+			}
+			else if (index == 5)
+			{
+				for (int i = 0; i < (int)PreVeh_05.size(); i++)
+					PzMenuz.push_back(GVM::GVMFields(PreVeh_05[i], GetVehName(PreVeh_05[i]), &Pz_PickFaveVeh, obj, &PreVeh_05[i]));
+			}
+			else
+			{
+				iVehList = 6;
+				for (int i = 0; i < (int)PreVeh_06.size(); i++)
+					PzMenuz.push_back(GVM::GVMFields(PreVeh_06[i], GetVehName(PreVeh_06[i]), &Pz_PickFaveVeh, obj, &PreVeh_06[i]));
+			}
+			GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + Friend->Name + "--", PzMenuz);
+			Pz_MenuList.push_back(MyMenu);
+		}
+	}
+}
+void Pz_ChangeFaveVeh(void* obj)
+{
+	LoggerLight("ChangeFaveVeh");
+	PhoneContact* Friend = static_cast<PhoneContact*>(obj);
+	if (Friend != nullptr)
+	{
+		std::vector<GVM::GVMFields> PzMenuz = {
+			GVM::GVMFields(PZTranslate[102], Friend->YourFriend.FaveVehicle, &Pz_PickFaveVeh, obj),
+			GVM::GVMFields(PZTranslate[103], Friend->YourFriend.FaveVehicle, &Pz_PickFaveVeh, obj),
+			GVM::GVMFields(PZTranslate[104], Friend->YourFriend.FaveVehicle, &Pz_PickFaveVeh, obj),
+			GVM::GVMFields(PZTranslate[105], Friend->YourFriend.FaveVehicle, &Pz_PickFaveVeh, obj),
+			GVM::GVMFields(PZTranslate[106], Friend->YourFriend.FaveVehicle, &Pz_PickFaveVeh, obj),
+			GVM::GVMFields(PZTranslate[107], Friend->YourFriend.FaveVehicle, &Pz_PickFaveVeh, obj),
+			GVM::GVMFields(PZTranslate[108], Friend->YourFriend.FaveVehicle, &Pz_PickFaveVeh, obj)
+		};
+		GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + Friend->Name  + "--", PzMenuz);
+		Pz_MenuList.push_back(MyMenu);
+	}
+}
+void DeleteContact(void* obj)
+{
+	LoggerLight("DeleteContact");
+	PhoneContact* Friend = static_cast<PhoneContact*>(obj);
+	if (Friend != nullptr)
+	{
+		FileRemoval(DirectContacts + "/" + Friend->Name + ".ini");
+		LoadContacts();
+		Pz_MenuList.clear();
+	}
+}
+void RenamingContact(void* obj)
+{
+	LoggerLight("RenamingContact");
+	PhoneContact* Friend = static_cast<PhoneContact*>(obj);
+	if (Friend != nullptr)
+	{
+		std::string nameIt = GVM::CaptureScreenText(PZTranslate[27]);
+		if (nameIt != "")
+		{
+			FileRemoval(DirectContacts + "/" + Friend->Name + ".ini");
+			Friend->Name = nameIt;
+			Friend->YourFriend.MyName = nameIt;
+			SaveContacts(*Friend);
+			int iBe = ReteaveBrain(Friend->YourFriend.MyIdentity);
+			if (iBe > 0 && iBe < (int)PedList.size())
+				PedList[iBe].MyName = nameIt;
+		}
+		if (Pz_MenuList.size() > 0)
+			Pz_MenuList[(int)Pz_MenuList.size() -1].Banner_Title = "--" + Friend->Name + "--";
+	}
+}
+void AddMobileContact(void* obj)
+{
+	LoggerLight("AddMobileContact");
+	PhoneContact* Friend = static_cast<PhoneContact*>(obj);
+	if (Friend != nullptr)
+		SaveContacts(*Friend);
+
+	AddPhoneFriends();
+}
+void CallupContact(void* obj)
+{
+	LoggerLight("CallupContact");
+	PhoneContact* myCon = static_cast<PhoneContact*>(obj);
+	if (myCon != nullptr)
+	{
+		ConectContact(myCon);
+		Pz_MenuList.clear();
+	}
+}
+void Pz_ContactEdit(void* obj)
+{
+	LoggerLight("Pz_ContactEdit");
+	PhoneContact* Friend = static_cast<PhoneContact*>(obj);
+	if (Friend != nullptr)
+	{
+		if (Pz_MenuList.size() > 0)
+			Pz_MenuList.pop_back();
+
+		if (Friend->InSession)
+		{
+			std::vector<GVM::GVMFields> PzMenuz = {
+				GVM::GVMFields(PZTranslate[27], PZTranslate[95], &RenamingContact, obj),
+				GVM::GVMFields(PZTranslate[96], PZTranslate[97], &DeleteContact, obj),
+				GVM::GVMFields(PZTranslate[98], PZTranslate[99], &Pz_ChangeFaveVeh, obj),
+				GVM::GVMFields(PZTranslate[90], PZTranslate[91], &Friend->YourFriend.IsMobileCont, &AddMobileContact, obj, true)
+			};
+			GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + Friend->Name + "--", PzMenuz);
+			Pz_MenuList.push_back(MyMenu);
+		}
+		else
+		{
+			std::vector<GVM::GVMFields> PzMenuz = {
+				GVM::GVMFields(PZTranslate[27], PZTranslate[95], &RenamingContact, obj),
+				GVM::GVMFields(PZTranslate[96], PZTranslate[97], &DeleteContact, obj),
+				GVM::GVMFields(PZTranslate[98], PZTranslate[99], &Pz_ChangeFaveVeh, obj),
+				GVM::GVMFields(PZTranslate[100], PZTranslate[101], &CallupContact, obj),
+				GVM::GVMFields(PZTranslate[90], PZTranslate[91], &Friend->YourFriend.IsMobileCont, &AddMobileContact, obj, true)
+			};
+			GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + Friend->Name + "--", PzMenuz);
+			Pz_MenuList.push_back(MyMenu);
+		}
+	}
+}
+void Pz_ContactList()
+{
+	LoadContacts();
+	std::vector<GVM::GVMFields> PzMenuz = {};
+	for (int i = 0; i < (int)PhoneContacts.size(); i++)
+		PzMenuz.push_back(GVM::GVMFields(PhoneContacts[i].Name, "", &Pz_ContactEdit, &PhoneContacts[i]));
+
+	if (PzMenuz.size() == 0)
+		PzMenuz.push_back(GVM::GVMFields(PZTranslate[93], ""));
+	GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[92] + "--", PzMenuz);
+	Pz_MenuList.push_back(MyMenu);
+}
+void AddNewContact(void* obj)
+{
+	LoggerLight("AddNewContact");
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		std::string ConMobAdd = DirectMobileNet + "/PzContacts" + Friend->MyName + ".ini";
+		std::string ConRetAdd = DirectMain + "/PzContacts" + Friend->MyName + ".ini";
+
+		Friend->IsInContacts = true;
+		PhoneContact NewCon = PhoneContact(Friend->MyName, ConMobAdd, ConRetAdd, *Friend);
+		NewCon.InSession = true;
+		SaveContacts(NewCon);
+		if (Pz_MenuList.size() > 0)
+			Pz_MenuList.pop_back();
+	}
+}
+void Pz_AddNewContact()
+{
+	std::vector<GVM::GVMFields> PzMenuz = {};
+
+	for (int i = 0; i < (int)PedList.size(); i++)
+	{
+		if (PedList[i].Follower && !PedList[i].IsInContacts)
+			PzMenuz.push_back(GVM::GVMFields(PedList[i].MyName, "", &AddNewContact, &PedList[i]));
+	}
+	if (PzMenuz.size() == 0)
+		PzMenuz.push_back(GVM::GVMFields(PZTranslate[92], ""));
+
+	GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[88] + "--", PzMenuz);
+	Pz_MenuList.push_back(MyMenu);
+}
+void Pz_Contacts()
+{
+	std::vector<GVM::GVMFields> PzMenuz = {
+		GVM::GVMFields(PZTranslate[86], PZTranslate[87], &Pz_ContactList),
+		GVM::GVMFields(PZTranslate[88], PZTranslate[89], &Pz_AddNewContact)
+		//GVM::GVMFields(PZTranslate[90], PZTranslate[91], &MySettings.MobileData)
+	};
+	GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[34] + "--", PzMenuz);
+	Pz_MenuList.push_back(MyMenu);
+}
+
+void Pz_TrollPed(void* obj);
+
+void HaCK001(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		Pz_MenuList.clear();
+		Friend->Driver = false;
+		Friend->Passenger = false;
+		Friend->IsPlane = false;
+		Friend->HackReaction = true;
+		Vector3 LandHere = FowardOf(PLAYER::PLAYER_PED_ID(), 5, true);
+		MoveEntity(Friend->ThisPed, LandHere);
+		Pz_TrollPed(obj);
+	}
+}
+void HaCK002(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		Pz_MenuList.clear();
+		FIRE::START_ENTITY_FIRE(Friend->ThisPed);
+		Friend->HackReaction = true;
+		FightPlayer(Friend);
+	}
+}
+void HaCK003(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		Pz_MenuList.clear();
+		Friend->TimeOn = 0;
+	}
+}
+void HaCK004(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		Pz_MenuList.clear();
+		Vector3 Above = ENTITY::GET_ENTITY_COORDS(Friend->ThisPed, true);
+		Above.z += 25.0;
+		Friend->HackReaction = true;
+		DropObjects(Above);
+	}
+}
+void HaCK005(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		Pz_MenuList.clear();
+		FireOrb(nullptr, Friend);
+		Friend->HackReaction = true;
+		FightPlayer(Friend);
+	}
+}
+void HaCK006(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		int iAmPig = BackOffPig();
+		Ped ThePlayer = PLAYER::PLAYER_PED_ID();
+
+		if (Friend->PiggyBackin)
+		{
+			ENTITY::DETACH_ENTITY(ThePlayer, 0, 0);
+			AI::CLEAR_PED_TASKS_IMMEDIATELY(ThePlayer);
+			Friend->PiggyBackin = false;
+			Friend->HackReaction = false;
+		}
+		else
+		{
+			if (iAmPig != -1)
+			{
+				ENTITY::DETACH_ENTITY(ThePlayer, 0, 0);
+				AI::CLEAR_PED_TASKS_IMMEDIATELY(ThePlayer);
+				PedList[iAmPig].PiggyBackin = false;
+			}
+
+			ForceAnim(ThePlayer, "amb@code_human_in_bus_passenger_idles@female@sit@idle_a", "idle_a", PlayerPosi(), NewVector3(0.0, 0.0, 0.0));
+			ENTITY::ATTACH_ENTITY_TO_ENTITY(ThePlayer, Friend->ThisPed, 31086, 0.10, 0.15, 0.61, 0.00, 0.00, 180.00, 0, 0, 0, 0, 2, 1);
+			Friend->PiggyBackin = true;
+			Friend->HackReaction = true;
+		}
+	}
+}
+void HaCK007(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		if (Friend->ThisPed != NULL)
+		{
+			Friend->DropMoneyBags = true;
+			Pz_MenuList.clear();
+		}
+	}
+}
+void HaCK008(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		Pz_MenuList.clear();
+		PedBlimp(&Friend->ThisBlip, Friend->ThisPed, 303, Friend->MyName, 1, false);
+		Friend->Bounty = true;
+	}
+}
+void HaCK009(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		Pz_MenuList.clear();
+		Friend->Driver = false;
+		Friend->Passenger = false;
+		Friend->HackReaction = true;
+		if (Friend->ThisVeh != NULL && Friend->ThisPed != NULL)
+			GetOutVehicle(Friend->ThisPed);
+	}
+}
+void HaCK010(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		if (Friend->ThisVeh != NULL)
+		{
+			if (HasASeat(Friend->ThisVeh))
+			{
+				Pz_MenuList.clear();
+				GetOutVehicle(PLAYER::PLAYER_PED_ID());
+
+				if (Friend->Follower)
+					FollowOn(Friend, true, false);
+				else
+					GetInVehicle(PLAYER::PLAYER_PED_ID(), Friend->ThisVeh, 0);
+			}
+			else
+				GetInVehicle(PLAYER::PLAYER_PED_ID(), Friend->ThisVeh, -1);
+		}
+	}
+}
+void HaCK011(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		if (Friend->XmasTree != NULL)
+		{
+			ENTITY::DELETE_ENTITY(&Friend->XmasTree);
+			Friend->HackReaction = false;
+			Friend->XmasTree = NULL;
+		}
+		else if (Friend->ThisPed != NULL)
+		{
+			Vector3 Vme = ENTITY::GET_ENTITY_COORDS(Friend->ThisPed, 0);
+			Friend->XmasTree = BuildProps("prop_xmas_tree_int", Vme, NewVector3(0.0, 90.0, 0.0), false);
+			ENTITY::SET_ENTITY_COLLISION(Friend->XmasTree, false, false);
+			ENTITY::ATTACH_ENTITY_TO_ENTITY(Friend->XmasTree, Friend->ThisPed, PED::GET_PED_BONE_INDEX(Friend->ThisPed, 24818), 0.0, 0.0, 0.0, 0.0, 90.0, 0.0, 0, 0, 0, 1, 2, 1);
+			Friend->HackReaction = true;
+		}
+	}
+}
+void HaCK012(void* obj)
+{
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		Pz_MenuList.clear();
+		if (Friend->ThisPed != NULL)
+		{
+			PED::SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(Friend->ThisPed, true);
+			Friend->EWO = true;
+			EasyWayOut(Friend->ThisPed);
+
+			Friend->HackReaction = true;
+			FightPlayer(Friend);
+		}
+	}
+}
+void LeaveYourApp(int index, void* obj)
+{
+	AfkPlayer* Friend = static_cast<AfkPlayer*>(obj);
+	if (Friend != nullptr)
+	{
+		if (index == 0)
+		{
+			int iPedLocate = ReteaveAfk(Friend->MyIdentity);
+
+			int PZSetMinSession = (MySettings.MinSession * 60) * 1000;
+			int PZSetMaxSession = (MySettings.MaxSession * 60) * 1000;
+
+			ClothBank MB = NewClothBank();
+			int iNat = RandomInt(1, 5);
+			int iGetGunnin = YourGunNum();
+			Vector3 LandHere = FowardOf(PLAYER::PLAYER_PED_ID(), 5, true);
+			PlayerBrain newBrain = PlayerBrain(Friend->MyName, Friend->MyIdentity, MB, InGameTime() + RandomInt(PZSetMinSession, PZSetMaxSession), Friend->Level, false, false, iNat, iGetGunnin, 0, "", -1);
+			PedList.push_back(newBrain);
+			PlayerPedGen(Vector4(LandHere.x, LandHere.y, LandHere.z, 0.0), &PedList[PedList.size() - 1], false);
+			AFKList[iPedLocate].MoveToOpen = true;
+			AFKList[iPedLocate].TimeOn = 0;
+		}
+		else if (index == 3)
+			LocalBlip(&Friend->ThisBlip, AFKPlayers[Friend->App], 303, Friend->MyName, 1);
+		else if (index == 4)
+		{
+			GVM::BottomLeft(Friend->MyName + PZTranslate[25]);
+			Friend->TimeOn = 0;
+		}
+		else
+			Friend->TimeOn = 0;
+	}
+
+}
+void Pz_TrollPed(void* obj)
+{
+	LoggerLight("Pz_TrollThis");
+	PlayerBrain* Friend = static_cast<PlayerBrain*>(obj);
+	if (Friend != nullptr)
+	{
+		if (Pz_MenuList.size() > 0)
+			Pz_MenuList.pop_back();
+
+		if (Friend->ThisPed == NULL)
+		{
+			std::vector<GVM::GVMFields> PzMenuz = { GVM::GVMFields(PZTranslate[161], "") };
+			GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[44] + "--", PzMenuz);
+			Pz_MenuList.push_back(MyMenu);
+		}
+		else if (Friend->YoDeeeed)
+		{
+			std::vector<GVM::GVMFields> PzMenuz = { GVM::GVMFields(PZTranslate[161], "") };
+			GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[44] + "--", PzMenuz);
+			Pz_MenuList.push_back(MyMenu);
+		}
+		else if (Friend->Driver)
+		{
+			std::vector<GVM::GVMFields> PzMenuz = {
+				GVM::GVMFields(PZTranslate[62], PZTranslate[63], &HaCK001, obj),//HaCK001(ThisPed);//"Bring Player to Self",
+				GVM::GVMFields(PZTranslate[64], PZTranslate[65], &HaCK002, obj),//HaCK002(ThisPed);//"Burn Player",
+				GVM::GVMFields(PZTranslate[66], PZTranslate[67], &HaCK003, obj),//HaCK003(ThisPed);//"Crash Player",
+				GVM::GVMFields(PZTranslate[68], PZTranslate[69], &HaCK004, obj),//HaCK004(ThisPed);//"Drop Objects On Player",
+				GVM::GVMFields(PZTranslate[76], PZTranslate[77], &HaCK008, obj),//HaCK008(ThisPed);//"Add Bounty to Player",
+				GVM::GVMFields(PZTranslate[78], PZTranslate[79], &HaCK009, obj),//HaCK009(ThisPed);//"Eject Player Vehicle",
+				GVM::GVMFields(PZTranslate[80], PZTranslate[81], &HaCK010, obj),//HaCK010(ThisPed);//"Enter Player Vehicle",
+				GVM::GVMFields(PZTranslate[82], PZTranslate[83], &HaCK011, obj),//HaCK011(ThisPed);//"Add Christmas Tree",
+				GVM::GVMFields(PZTranslate[84], PZTranslate[85], &HaCK012, obj),//HaCK012(ThisPed);//"EWO",*/
+			};
+			GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[44] + "--", PzMenuz);
+			Pz_MenuList.push_back(MyMenu);
+		}
+		else if (Friend->Passenger)
+		{
+			std::vector<GVM::GVMFields> PzMenuz = {
+				GVM::GVMFields(PZTranslate[62], PZTranslate[63], &HaCK001, obj),//HaCK001(ThisPed);//"Bring Player to Self",
+				GVM::GVMFields(PZTranslate[64], PZTranslate[65], &HaCK002, obj),//HaCK002(ThisPed);//"Burn Player",
+				GVM::GVMFields(PZTranslate[66], PZTranslate[67], &HaCK003, obj),//HaCK003(ThisPed);//"Crash Player",
+				GVM::GVMFields(PZTranslate[68], PZTranslate[69], &HaCK004, obj),//HaCK004(ThisPed);//"Drop Objects On Player",
+				GVM::GVMFields(PZTranslate[76], PZTranslate[77], &HaCK008, obj),//HaCK008(ThisPed);//"Add Bounty to Player",
+				GVM::GVMFields(PZTranslate[78], PZTranslate[79], &HaCK009, obj),//HaCK009(ThisPed);//"Eject Player Vehicle",
+				GVM::GVMFields(PZTranslate[82], PZTranslate[83], &HaCK011, obj),//HaCK011(ThisPed);//"Add Christmas Tree",
+				GVM::GVMFields(PZTranslate[84], PZTranslate[85], &HaCK012, obj),//HaCK012(ThisPed);//"EWO",*/
+			};
+			GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[44] + "--", PzMenuz);
+			Pz_MenuList.push_back(MyMenu);
+		}
+		else
+		{
+			std::vector<GVM::GVMFields> PzMenuz = {
+				GVM::GVMFields(PZTranslate[62], PZTranslate[63], &HaCK001, obj),//HaCK001(ThisPed);//"Bring Player to Self",
+				GVM::GVMFields(PZTranslate[64], PZTranslate[65], &HaCK002, obj),//HaCK002(ThisPed);//"Burn Player",
+				GVM::GVMFields(PZTranslate[66], PZTranslate[67], &HaCK003, obj),//HaCK003(ThisPed);//"Crash Player",
+				GVM::GVMFields(PZTranslate[68], PZTranslate[69], &HaCK004, obj),//HaCK004(ThisPed);//"Drop Objects On Player",
+				GVM::GVMFields(PZTranslate[70], PZTranslate[71], &HaCK005, obj),//HaCK005(ThisPed);//"Orbital Strike Player",
+				GVM::GVMFields(PZTranslate[72], PZTranslate[73], &HaCK006, obj),//HaCK006(ThisPed);//"PiggyBack Player",
+				GVM::GVMFields(PZTranslate[74], PZTranslate[75], &HaCK007, obj),//HaCK007(ThisPed);//"Drop Moneys on Player",
+				GVM::GVMFields(PZTranslate[76], PZTranslate[77], &HaCK008, obj),//HaCK008(ThisPed);//"Add Bounty to Player",
+				GVM::GVMFields(PZTranslate[82], PZTranslate[83], &HaCK011, obj),//HaCK011(ThisPed);//"Add Christmas Tree",
+				GVM::GVMFields(PZTranslate[84], PZTranslate[85], &HaCK012, obj),//HaCK012(ThisPed);//"EWO",*/
+			};
+			GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[44] + "--", PzMenuz);
+			Pz_MenuList.push_back(MyMenu);
+		}
+	}
+}
+void Pz_TrollAdd(void* obj)
+{
+	LoggerLight("Pz_TrollThis");
+	AfkPlayer* Friend = static_cast<AfkPlayer*>(obj);
+	if (Friend != nullptr)
+	{
+		if (Pz_MenuList.size() > 0)
+			Pz_MenuList.pop_back();
+		std::vector<GVM::GVMFields> PzMenuz = {
+			GVM::GVMFields(PZTranslate[62], PZTranslate[63], &LeaveYourApp, obj),//HaCK001(ThisPed);//"Bring Player to Self",
+			GVM::GVMFields(PZTranslate[64], PZTranslate[65], &LeaveYourApp, obj),//HaCK002(ThisPed);//"Burn Player",
+			GVM::GVMFields(PZTranslate[66], PZTranslate[67], &LeaveYourApp, obj),//HaCK003(ThisPed);//"Crash Player",
+			GVM::GVMFields(PZTranslate[76], PZTranslate[77], &LeaveYourApp, obj),//HaCK008(ThisPed);//"Add Bounty to Player",
+			GVM::GVMFields(PZTranslate[84], PZTranslate[85], &LeaveYourApp, obj)//HaCK012(ThisPed);//"EWO",*/
+		};
+		GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[44] + "--", PzMenuz);
+		Pz_MenuList.push_back(MyMenu);			
+	}
+}
+void Pz_TrollPlayerz()
+{
+	std::vector<GVM::GVMFields> PzMenuz = {};
+
+	for (int i = 0; i < PedList.size(); i++)
+		PzMenuz.push_back(GVM::GVMFields(PedList[i].MyName, "", &Pz_TrollPed, &PedList[i]));
+
+	for (int i = 0; i < AFKList.size(); i++)
+		PzMenuz.push_back(GVM::GVMFields(AFKList[i].MyName, "", &Pz_TrollAdd, &AFKList[i]));
+
+	if (PzMenuz.size() == 0)
+		PzMenuz.push_back(GVM::GVMFields(PZTranslate[61], ""));
+
+	GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[44] + "--", PzMenuz);
+	Pz_MenuList.push_back(MyMenu);
+}
+void BurnPlayers()
+{
+	for (int i = 0; i < (int)PedList.size(); i++)
+	{
+		if (!PedList[i].Follower)
+			HaCK002(&PedList[i]);
+		if (DistanceTo(PedList[i].ThisPed, PLAYER::PLAYER_PED_ID()) > 70.0)
+			ENTITY::SET_ENTITY_HEALTH(PedList[i].ThisPed, 0);
+	}
+
+	for (int i = 0; i < (int)AFKList.size(); i++)
+	{
+		GVM::BottomLeft("~h~" + AFKList[i].MyName + "~s~ " + PZTranslate[28]);
+		AFKList[i].TimeOn = 0;
+	}
+}
+void CashFlow()
+{
+	for (int i = 0; i < (int)PedList.size(); i++)
+		HaCK007(&PedList[i]);
+}
+void GetingOffHere()
+{
+	for (int i = 0; i < (int)PedList.size(); i++)
+	{
+		PedList[i].Driver = false;
+		PedList[i].Passenger = false;
+		if (PedList[i].ThisPed != NULL)
+			GetOutVehicle(PedList[i].ThisPed);
+	}
+}
+
+bool ItsSnowing = false;
+void SnowTime()
+{
+	if (ItsSnowing)
+	{
+		AccessLetItSnowType(true);
+		if (WEAPON::HAS_PED_GOT_WEAPON(PLAYER::PLAYER_PED_ID(), MyHashKey("WEAPON_snowball"), false))
+			WEAPON::GIVE_WEAPON_TO_PED(PLAYER::PLAYER_PED_ID(), MyHashKey("WEAPON_snowball"), 9999, false, true);
+	}
+	else
+	{
+		AccessLetItSnowType(false);
+		if (WEAPON::HAS_PED_GOT_WEAPON(PLAYER::PLAYER_PED_ID(), MyHashKey("WEAPON_snowball"), false))
+			WEAPON::REMOVE_WEAPON_FROM_PED(PLAYER::PLAYER_PED_ID(), MyHashKey("WEAPON_snowball"));
+	}
+}
+void PlayerEWO()
+{
+	Pz_MenuList.clear();
+	EasyWayOut(PLAYER::PLAYER_PED_ID());
+	GVM::BottomLeft(PZTranslate[26]);
+}
+void Pz_TrollMenu()
+{
+	ItsSnowing = AccessSnowFallType();
+	std::vector<GVM::GVMFields> PzMenuz = {
+		GVM::GVMFields(PZTranslate[45], PZTranslate[46], &Pz_TrollPlayerz),
+		GVM::GVMFields(PZTranslate[47], PZTranslate[48], &BurnPlayers),
+		GVM::GVMFields(PZTranslate[49], PZTranslate[50], &CashFlow),
+		GVM::GVMFields(PZTranslate[51], PZTranslate[52], &GetingOffHere),
+		GVM::GVMFields(PZTranslate[53], PZTranslate[54], &GotWindMill , &EclipsWindMill, true),
+		GVM::GVMFields(PZTranslate[55], PZTranslate[56], &NotWanted),
+		GVM::GVMFields(PZTranslate[57], PZTranslate[58], &ItsSnowing),
+		GVM::GVMFields(PZTranslate[59], PZTranslate[60], &PlayerEWO)
+	};
+	GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[32] + "--", PzMenuz, &SnowTime, false);
+	Pz_MenuList.push_back(MyMenu);
+}
+
+void SavePzSetts()
+{
+	ReBuildIni();
+	if (MySettings.InviteOnly)
+		LaggOut(true);
+}
+
+void Pz_MenuStart()
+{
+	std::vector<GVM::GVMFields> PzMenuz = {
+		GVM::GVMFields(PZTranslate[32], PZTranslate[33], &Pz_TrollMenu),
+		GVM::GVMFields(PZTranslate[34], PZTranslate[35], &Pz_Contacts),
+		GVM::GVMFields(PZTranslate[36], PZTranslate[37], &Pz_Settings),
+		GVM::GVMFields(PZTranslate[38], PZTranslate[39], &MeunLaggOut),
+		GVM::GVMFields(PZTranslate[40], PZTranslate[41], &MySettings.InviteOnly)
+	};
+	GVM::GVMSystem MyMenu = GVM::GVMSystem("--" + PZTranslate[44] + "--", PzMenuz, &SavePzSetts, true);
+	Pz_MenuList.push_back(MyMenu);
+}
+
+int GotHacked = 1;
+int OrigLang = 0;
+Prop PlayTree = NULL;
+
+void GotHacked006()
+{
+	GotHacked++;
+}
+void GotHacked005()
+{
+	Pz_MenuList.clear();
+	GotHacked++;
+	ItsSnowing = false;
+	SnowTime();
+	MySettings.Pz_Lang = OrigLang;
+	LoadLang(MySettings.Pz_Lang);
+	MeunLaggOut();
+	HackAttacks = false;
+}
+void GotHacked004()
+{
+	Pz_MenuList.clear();
+	int MoreHacks = LessRandomInt("MissingCat", 1, 5);
+	if (MoreHacks == 1)
+	{
+		Vector3 PlPos = EntityPosition(PLAYER::PLAYER_PED_ID());
+		MoveEntity(PLAYER::PLAYER_PED_ID(), NewVector3(PlPos.x, PlPos.y, PlPos.z + 400.0f));
+	}
+	else if (MoreHacks == 2)
+	{
+		int iPick = -1;
+		for (int i = 0; i < (int)PedList.size(); i++)
+		{
+			if (PedList[i].Driver && PedList[i].ThisVeh != NULL)
+				iPick = i;
+		}
+		if (iPick > 0)
+			HaCK010(&PedList[iPick]);
+		else
+			DropObjects(EntityPosition(PLAYER::PLAYER_PED_ID()));
+	}
+	else if (MoreHacks == 3)
+	{
+		FIRE::START_ENTITY_FIRE(PLAYER::PLAYER_PED_ID());
+	}
+	else if (MoreHacks == 4)
+	{
+		MoneyBags Mbags = MoneyBags();
+
+		while (Mbags.BagsDroped < 10)
+		{
+			if (Mbags.BagTimer < InGameTime())
+			{
+				Mbags.BagsDroped++;
+				Mbags.BagTimer = InGameTime() + 500;
+				Vector4 AboutHere = InAreaOf(ENTITY::GET_ENTITY_COORDS(PLAYER::PLAYER_PED_ID(), true), 0.01f, 4.0f);
+				Prop MoreBag = BuildProps(Mbags.Bags, NewVector3(AboutHere.X, AboutHere.Y, AboutHere.Z + 5.0f), NewVector3(0.0, 0.0, 0.0), true);
+				Mbags.TheseBags.push_back(MoreBag);
+			}
+			for (int i = 0; i < (int)Mbags.TheseBags.size(); i++)
+			{
+				if (DistanceTo(PLAYER::PLAYER_PED_ID(), Mbags.TheseBags[i]) < 1.25f)
+				{
+					if ((bool)ENTITY::DOES_ENTITY_EXIST(Mbags.TheseBags[i]))
+						ENTITY::DELETE_ENTITY(&Mbags.TheseBags[i]);
+				}
+			}
+			WAIT(0);
+		}
+		WAIT(2000);
+		
+		TakeAwayYourMoney(&Mbags);
+	}
+	else if (MoreHacks == 5)
+	{
+		PLAYER::SET_PLAYER_WANTED_LEVEL(PLAYER::PLAYER_ID(), 5, true);
+		PLAYER::SET_PLAYER_WANTED_LEVEL_NOW(PLAYER::PLAYER_ID(), true);
+	}
+
+	if (HackerIsInSession)
+	{
+		GotHacked++;
+	}
+}
+void GotHacked003()
+{
+	Pz_MenuList.clear();
+	PlayerEWO();
+}
+void GotHacked002()
+{
+	Pz_MenuList.clear();
+
+	if (PlayTree != NULL)
+	{
+		ENTITY::DELETE_ENTITY(&PlayTree);
+		PlayTree = NULL;
+		GotHacked++;
+	}
+	else if (PlayTree == NULL)
+	{
+		ItsSnowing = true;
+		SnowTime();
+		Vector3 Vme = ENTITY::GET_ENTITY_COORDS(PLAYER::PLAYER_PED_ID(), 0);
+		PlayTree = BuildProps("prop_xmas_tree_int", Vme, NewVector3(0.0, 90.0, 0.0), false);
+		ENTITY::SET_ENTITY_COLLISION(PlayTree, false, false);
+		ENTITY::ATTACH_ENTITY_TO_ENTITY(PlayTree, PLAYER::PLAYER_PED_ID(), PED::GET_PED_BONE_INDEX(PLAYER::PLAYER_PED_ID(), 24818), 0.0, 0.0, 0.0, 0.0, 90.0, 0.0, 0, 0, 0, 1, 2, 1);
+		WAIT(4000);
+	}
+}
+void GotHacked001()
+{
+	Pz_MenuList.clear();
+	OrigLang = MySettings.Pz_Lang;
+	MySettings.Pz_Lang = LessRandomInt("GotHacked001", 0, 12);
+	if (OrigLang == MySettings.Pz_Lang)
+		MySettings.Pz_Lang = LessRandomInt("GotHacked001", 0, 12);
+	LoadLang(MySettings.Pz_Lang);
+	GotHacked++;
+}
+void Pz_HackedMenu()
+{
+	if (GotHacked == 1)
+	{
+		std::vector<GVM::GVMFields> PzMenuz = {
+			GVM::GVMFields("void*->", "{ x001[iField] }", &GotHacked001),
+			GVM::GVMFields("10011010", "01101101"),
+		};
+		GVM::GVMSystem MyMenu = GVM::GVMSystem("void*->Ip 312.678.968", PzMenuz);
+		Pz_MenuList.push_back(MyMenu);
+	}
+	else if (GotHacked == 2)
+	{
+		std::vector<GVM::GVMFields> PzMenuz = {
+			GVM::GVMFields("10011010", "01101101"),
+			GVM::GVMFields("10010101", "00110010"),
+			GVM::GVMFields("00110101", "10100101"),
+			GVM::GVMFields("void*->", "{ x032[iField] }", &GotHacked002),
+			GVM::GVMFields("11110110", "10110101"),
+			GVM::GVMFields("01100001", "01010010")
+		};
+		GVM::GVMSystem MyMenu = GVM::GVMSystem("void*->Ip 056.358.113", PzMenuz);
+		Pz_MenuList.push_back(MyMenu);
+	}
+	else if (GotHacked == 3)
+	{
+		MySettings.Pz_Lang = OrigLang;
+		std::vector<GVM::GVMFields> PzMenuz = {
+			GVM::GVMFields(PZTranslate[34], PZTranslate[35], &Pz_Contacts),
+			GVM::GVMFields("10011010", "01101101"),
+			GVM::GVMFields("10010101", "00110010"),
+			GVM::GVMFields("11110110", "10110101"),
+			GVM::GVMFields("01100001", "01010010"),
+			GVM::GVMFields("void*->", "{ x512[iField] }", &GotHacked004)
+		};
+		GVM::GVMSystem MyMenu = GVM::GVMSystem("void*->Ip 443.417.473", PzMenuz);
+		Pz_MenuList.push_back(MyMenu);
+	}
+	else if (GotHacked == 4)
+	{
+		std::vector<GVM::GVMFields> PzMenuz = {
+			GVM::GVMFields(PZTranslate[36], PZTranslate[37], &GotHacked003),
+			GVM::GVMFields("void*->", "{ x06[iField] }", &GotHacked003),
+			GVM::GVMFields("10011010", "01101101"),
+			GVM::GVMFields("01100001", "01010010"),
+			GVM::GVMFields(PZTranslate[34], PZTranslate[35], &GotHacked003),
+			GVM::GVMFields("11110110", "10110101")
+		};
+		GVM::GVMSystem MyMenu = GVM::GVMSystem("void*->Ip 121.786.455", PzMenuz, &GotHacked006, false);
+		Pz_MenuList.push_back(MyMenu);
+	}
+	else
+	{
+		std::vector<GVM::GVMFields> PzMenuz = {
+			GVM::GVMFields("10011010", "01101101"),
+			GVM::GVMFields(PZTranslate[34], PZTranslate[35], &GotHacked003),
+			GVM::GVMFields("11110110", "10110101"),
+			GVM::GVMFields(PZTranslate[38], PZTranslate[39], &GotHacked005),
+			GVM::GVMFields(PZTranslate[36], PZTranslate[37], &GotHacked003),
+			GVM::GVMFields("01100001", "01010010")
+		};
+		GVM::GVMSystem MyMenu = GVM::GVMSystem("void*->Ip 443.417.473", PzMenuz);
+		Pz_MenuList.push_back(MyMenu);
+	}
 }
 
 bool PhonesOff = false;
@@ -5142,16 +5864,167 @@ int ClosingPhone = 0;
 int ScanForBy = 0;
 int SnowScan = 0;
 int HidyHo = 0;
+void Yacht_Party(bool Loadin)
+{
+	if (Loadin)
+	{
+		const std::vector<Vector3> Pos_01 = {
+			NewVector3(-2041.087f, -1032.308f, 11.98071f),
+			NewVector3(-2101.375f, -1012.525f, 8.969614f),
+			NewVector3(-2118.985f, -1006.77f, 7.920915f),
+			NewVector3(-2088.573f, -1016.668f, 8.971194f),
+			NewVector3(-2031.578f, -1040.083f, 5.882085f),
+			NewVector3(-2029.057f, -1032.141f, 5.88269f),
+			NewVector3(-2046.618f, -1030.548f, 11.98071f),
+			NewVector3(-2059.485f, -1026.207f, 11.90751f),
+			NewVector3(-2067.97f, -1023.662f, 11.90972f),
+			NewVector3(-2039.228f, -1033.173f, 8.971494f)
+		};
+		std::vector<int> PedPool = {};
+		for (int i = 0; i < (int)PhoneContacts.size(); i++)
+		{
+			if (!PlayerOnline(PhoneContacts[i].YourFriend.MyIdentity))
+				PedPool.push_back(i);
+		}
+		RandomizeIntList(&PedPool);
+
+		for (int i = 1; i < Pos_01.size(); i++)
+		{
+			if (PedPool.size() == 0)
+				break;
+
+			if (i < 6)
+			{
+				int iRanPeds = RandomInt(2, 3);
+				for (int ii = 0; ii < iRanPeds; ii++)
+				{
+					if (PedPool.size() == 0)
+						break;
+
+					Vector4 VPedPos = InAreaOf(Pos_01[i], 1.5f, 3.5f);
+					PartyContactCall(&PhoneContacts[PedPool[PedPool.size() - 1]], VPedPos);
+					PedPool.pop_back();
+				}
+			}
+			else
+			{
+				if (i == Pos_01.size() - 1)
+				{
+					for (int ii = 0; ii < 9; ii++)
+					{
+						if (PedPool.size() == 0)
+							break;
+
+						Vector4 VPedPos = InAreaOf(Pos_01[i], 1.5f, 3.5f);
+						PartyContactCall(&PhoneContacts[PedPool[PedPool.size() - 1]], VPedPos);
+						PedPool.pop_back();
+					}
+				}
+				else
+				{
+					int iRanPeds = RandomInt(1, 3);
+					for (int ii = 0; ii < iRanPeds; ii++)
+					{
+						if (PedPool.size() == 0)
+							break;
+
+						Vector4 VPedPos = InAreaOf(Pos_01[i], 1.5f, 3.5f);
+						PartyContactCall(&PhoneContacts[PedPool[PedPool.size() - 1]],  VPedPos);
+						PedPool.pop_back();
+					}
+				}
+			}
+		}
+	
+		std::vector<std::string> PedOuts = {};
+		for (int i = 0; i < PedList.size(); i++)
+		{
+			if (PedList[i].AtTheParty)
+				PedOuts.push_back(std::to_string(PedList[i].ThisPed));
+		}
+		WriteFile(sYachtPart2, PedOuts);
+	}
+	else
+	{
+		for (int i = 0; i < PedList.size(); i++)
+		{
+			if (PedList[i].AtTheParty)
+				PedList[i].TimeOn = 0;
+		}
+	}
+}
+
+bool YachtPart = false;
+void FileScan()
+{
+	ScanForBy = InGameTime() + 5000;
+	if (!ClosedSession)
+	{
+		if (FileExists(DisablePZExt))
+		{
+			LaggOut(true);
+			ClosedSession = true;
+		}
+	}
+	else
+	{
+		if (!FileExists(DisablePZExt))
+		{
+			ClosedSession = false;
+			if (FileExists(NspmTargs))
+				FileRemoval(NspmTargs);
+		}
+	}
+
+	if (!YachtPart)
+	{
+		if (FileExists(sYachtPart))
+		{
+			Yacht_Party(true);
+			YachtPart = true;
+		}
+	}
+	else
+	{
+		if (!FileExists(sYachtPart))
+		{
+			Yacht_Party(false);
+			YachtPart = false;
+		}
+	}
+
+	for (int i = 0; i < (int)PhoneContacts.size(); i++)
+	{
+		if (FileExists(PhoneContacts[i].ConReturnAdd))
+		{
+			FileRemoval(PhoneContacts[i].ConReturnAdd);
+			ConectContact(&PhoneContacts[i]);
+			break;
+		}
+	}
+}
+
 void ChaterBox()
 {
 	while (true)
 	{
-		if (!bStartTheMod)
+		if (!StartTheMod)
 		{
+			if ((bool)ENTITY::IS_ENTITY_DEAD(PLAYER::PLAYER_PED_ID()) && !PlayDead)
+			{
+				PlayDead = true;
+				PlayersKiller();
+			}
+
+			if (MissingFunk)
+			{
+				GVM::BottomLeft(PZTranslate[162]);
+				MissingFunk = false;
+			}
 			if (ShitTalk.size() > 0)
 			{
 				for (int i = 0; i < ShitTalk.size(); i++)
-					RightSide(ShitTalk[i].Talk, i);
+					GVM::RightSideChat(ShitTalk[i].Talk, i);
 
 				for (int i = 0; i < ShitTalk.size(); i++)
 				{
@@ -5170,31 +6043,9 @@ void ChaterBox()
 							if ((bool)ENTITY::IS_ENTITY_ON_SCREEN(PedList[i].ThisPed) && !PedList[i].YoDeeeed && !PedList[i].Passenger)
 							{
 								Vector3 PedPos = RightOf(PedList[i].ThisPed, 0.5, false);
-								showPlayerLabel(NewVector3(PedPos.x, PedPos.y, PedPos.z + 1.0f), 10.0, vector<string>{PedList[i].MyName});
+								showPlayerLabel(NewVector3(PedPos.x, PedPos.y, PedPos.z + 1.0f), 10.0, std::vector<std::string>{PedList[i].MyName});
 							}
 						}
-					}
-				}
-			}
-			if (MySettings.PassiveMode)
-			{
-				if (iPasiveMode != -1)
-				{
-					if (iPasiveMode < InGameTime())
-					{
-						iPasiveMode = -1;
-						ENTITY::SET_ENTITY_INVINCIBLE(PLAYER::PLAYER_PED_ID(), 0);
-						ENTITY::SET_ENTITY_ALPHA(PLAYER::PLAYER_PED_ID(), 255, false);
-						CAM::DO_SCREEN_FADE_IN(1);
-						PlayDead = false;
-					}
-				}
-				else
-				{
-					if ((bool)ENTITY::IS_ENTITY_DEAD(PLAYER::PLAYER_PED_ID()))
-					{
-						PlayDead = true;
-						PlayersKiller();
 					}
 				}
 			}
@@ -5206,15 +6057,6 @@ void ChaterBox()
 					PLAYER::SET_PLAYER_WANTED_LEVEL_NOW(PLAYER::PLAYER_ID(), false);
 				}
 			}
-			if (ItsSnowing)
-			{
-				if (SnowScan < InGameTime())
-				{
-					SnowScan = InGameTime() + 1000;
-					GRAPHICS::_SET_FORCE_PED_FOOTSTEPS_TRACKS(true);
-					GRAPHICS::_SET_FORCE_VEHICLE_TRAILS(true);
-				}
-			}
 			if (HideTrafic)
 			{
 				if (HidyHo < InGameTime())
@@ -5223,17 +6065,110 @@ void ChaterBox()
 					GhostTown();
 				}
 			}
+			if (MySettings.PassiveMode)
+				PassiveProg();
 		}
 
-		WAIT(1);
+		WAIT(0);
+	}
+}
+
+bool MenuOpen = false;
+void JustMenus()
+{
+	while (true)
+	{
+		if (!StartTheMod)
+		{
+			if (!MenuOpen)
+			{
+				if (HackAttacks)
+				{
+					if (YouFriend.MyBrain != nullptr)
+						WillYouBeMyFriend();
+
+					if (GVM::ButtonDown(MySettings.Control_Keys_Players_List))
+						DisplayPlayers();
+
+					if (WHileKeyDown(MySettings.Keys_Open_Menu))
+					{
+						MenuOpen = true;
+						Pz_HackedMenu();
+					}
+					else if (GVM::ButtonDown(MySettings.Control_A_Open_Menu) && GVM::ButtonDown(MySettings.Control_B_Open_Menu))
+					{
+						MenuOpen = true;
+						Pz_HackedMenu();
+					}
+				}
+				else
+				{
+					if (YouFriend.MyBrain != nullptr)
+						WillYouBeMyFriend();
+
+					if (GVM::ButtonDown(MySettings.Control_Keys_Players_List))
+						DisplayPlayers();
+
+					if (WHileKeyDown(MySettings.Keys_Clear_Session))
+						LaggOut(false);
+					else if (GVM::ButtonDown(MySettings.Control_A_Clear_Session) && GVM::ButtonDown(MySettings.Control_B_Clear_Session))
+						LaggOut(false);
+
+					if (WHileKeyDown(MySettings.Keys_Invite_Only))
+					{
+						MySettings.InviteOnly = !MySettings.InviteOnly;
+						bool bTrue = true;
+						LaggOut(&bTrue);
+						ReBuildIni();
+					}
+					else if (GVM::ButtonDown(MySettings.Control_A_Invite_Only) && GVM::ButtonDown(MySettings.Control_B_Invite_Only))
+					{
+						MySettings.InviteOnly = !MySettings.InviteOnly;
+						bool bTrue = true;
+						LaggOut(&bTrue);
+						ReBuildIni();
+					}
+
+					if (WHileKeyDown(MySettings.Keys_Open_Menu))
+					{
+						MenuOpen = true;
+						Pz_MenuStart();
+					}
+					else if (GVM::ButtonDown(MySettings.Control_A_Open_Menu) && GVM::ButtonDown(MySettings.Control_B_Open_Menu))
+					{
+						MenuOpen = true;
+						Pz_MenuStart();
+					}
+				}
+			}
+			else
+			{
+				if (Pz_MenuList.size() > 0)
+				{
+					if (Pz_MenuList[(int)Pz_MenuList.size() - 1]._Back)
+						Pz_MenuList.pop_back();
+					else
+						GVM::MenuDisplay(&Pz_MenuList[(int)Pz_MenuList.size() - 1], GVM::DefaultRatio);
+				}
+				else
+					MenuOpen = false;
+			}
+		}
+
+		WAIT(0);
 	}
 }
 
 DWORD waitTime = 0;
 void main()
 {
-	if (FileExists(sDisenable))
-		FileRemoval(sDisenable);
+	DirectoryTest();
+
+	if (FileExists(DisablePZExt))
+		FileRemoval(DisablePZExt);
+
+	if (FileExists(sYachtPart))
+		FileRemoval(sYachtPart);
 
 	if (FileExists(ZeroYank))
 		FileRemoval(ZeroYank);
@@ -5244,111 +6179,67 @@ void main()
 	if (FileExists(sSnowie))
 		FileRemoval(sSnowie);
 
+	if (FileExists(NspmTargs))
+		FileRemoval(NspmTargs);
+
 	while (true)
 	{
-		if (bStartTheMod)
+		if (StartTheMod)
 		{
+			WAIT(1000);
 			if (!(bool)DLC2::GET_IS_LOADING_SCREEN_ACTIVE())
 			{
-				LoggerLight("bStartTheMod");
-				bStartTheMod = false;
+				LoggerLight("LOADING_SCREEN Completed");
+				StartTheMod = false;
 				LoadinData();
 
 				if (FirstRun)
 				{
-					WAIT(10000);
-					ShitTalk.push_back(ShitTalking(PZLang[0], InGameTime() + 10000));
+					WAIT(15000);
+					ShitTalk.push_back(ShitTalking(PZTranslate[0], InGameTime() + 10000));
 					ShitTalk.push_back(ShitTalking("", InGameTime() + 10000));
-					ShitTalk.push_back(ShitTalking(PZLang[1], InGameTime() + 10000));
-					iMenuSys = 1;
-					MenuLoops();
+					ShitTalk.push_back(ShitTalking(PZTranslate[1], InGameTime() + 10000));
+					Pz_MenuStart();
 				}
 			}
-			WAIT(10000);
 		}
 		else
 		{
-			DWORD maxTickCount = GetTickCount() + waitTime;
-			do
+			if (ScanForBy < InGameTime())
+				FileScan();
+			if (SessionCleaning)
 			{
-				if (!bMenuOpen)
+
+				if ((int)AFKList.size() > 0 || (int)PedList.size() > 0)
 				{
-					if (IsIsSafe(MySettings.Control_Players) || WHileKeyDown(MySettings.Keys_Players))
-						DisplayPlayers();
-					else if (ButtonDown(MySettings.Control_A_Clear, false) && ButtonDown(MySettings.Control_B_Clear, false))
-						LaggOut(false);
-					else if (WHileKeyDown(MySettings.Keys_Clear))
-						LaggOut(false);
-					else if (!BypassAll && ButtonDown(MySettings.Control_A_Invite, false) && ButtonDown(MySettings.Control_B_Invite, false))
+					if ((int)PedList.size() > 0)
 					{
-						MySettings.InviteOnly = !MySettings.InviteOnly;
-						LaggOut(true);
-						ReBuildIni(&MySettings);
+						for (int i = 0; i < (int)PedList.size(); i++)
+							PedList[i].TimeOn = 0;
 					}
-					else if (WHileKeyDown(MySettings.Keys_Invite))
+
+					if ((int)AFKList.size() > 0)
 					{
-						MySettings.InviteOnly = !MySettings.InviteOnly;
-						LaggOut(true);
-						ReBuildIni(&MySettings);
-					}
-					else if (WHileKeyDown(MySettings.Keys_Open) || bTrigMenu)
-					{
-						bTrigMenu = false;
-						bMenuOpen = true;
-						iMenuSys = 1;
-						MenuLoops();
-					}
-				}
-
-				if (MySettings.MobileData && (int)PhoneContacts.size() > 0)
-				{
-					if (ClosingPhone < InGameTime())
-						PhoneFreeking();
-				}
-
-				if (DropMoneys)
-					ThemMoneyBAgs();
-
-				WAIT(0);
-			} while (GetTickCount() < maxTickCount);
-			waitTime = 0;
-
-			if (!BypassAll)
-			{
-				if (ScanForBy < InGameTime())
-				{
-					ScanForBy = InGameTime() + 5000;
-					if (FileExists(sDisenable))
-					{
-						LaggOut(true);
-						BypassAll = true;
+						for (int i = 0; i < (int)AFKList.size(); i++)
+							AFKList[i].TimeOn = 0;
 					}
 				}
 				else
-				{
-					if (YouFriend.MyIdentity != "Empty")
-						WillYouBeMyFriend();
-				}
-			}
-			else if (ScanForBy < InGameTime())
-			{
-				ScanForBy = InGameTime() + 5000;
-				if (!FileExists(sDisenable))
-					BypassAll = false;
-			}
-
-			if (SlowScan < InGameTime())
-			{
-				SlowScan = InGameTime() + 2000;
-				ScanArea();
+					SessionCleaning = false;
 			}
 			
 			PlayerZerosAI();
-			WAIT(1);
 		}
+		
+		WAIT(0);
 	}
 }
 
+void AddMenuThread()
+{
+	srand(GetTickCount());
+	JustMenus();
+}
 void AddChaterBox()
 {
 	srand(GetTickCount());

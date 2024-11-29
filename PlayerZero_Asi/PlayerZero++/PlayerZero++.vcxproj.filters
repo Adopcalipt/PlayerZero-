@@ -5,6 +5,7 @@
     <ClCompile Include="script.cpp" />
     <ClCompile Include="keyboard.cpp" />
     <ClCompile Include="PZSys.cpp" />
+    <ClCompile Include="GtaVMenu.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="script.h" />
@@ -26,6 +27,7 @@
     </ClInclude>
     <ClInclude Include="PZSys.h" />
     <ClInclude Include="filesystem.hpp" />
+    <ClInclude Include="GtaVMenu.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="include">

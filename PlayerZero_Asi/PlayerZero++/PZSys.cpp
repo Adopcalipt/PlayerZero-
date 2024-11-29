@@ -1,71 +1,99 @@
+/*
+   Player Zero FunctionScript
+	--By Adopocalipt 2023--
+*/
+
 #include "PZSys.h"
 #include "keyboard.h"
+#include "GtaVMenu.h"
 
-using namespace std;
+using namespace PZClass;
 using namespace PZData;
 
-#include <Windows.h>
-#include <Psapi.h>
-#include <cstdlib>
-#include <sys/stat.h>
-#include <string>
-#include <codecvt>
-#include <array>
-#include <locale>
-#include <ctime>
-#include <cmath>
-#include <vector>
-#include <iostream>
-#include <sstream>
+#include <cstdlib>		//sRand - Random Number Generator
+#include <ctime>		//time_t - Get the current date/time
+#include <cmath>		//Math Functions Cos Tan etc...
+#include <filesystem>	//Directory control Add/Remove Folders
+#include <fstream>		//ofstream read/write text documents
+#include <iostream>		//Header that defines the standard input/output stream objects:
 
-#pragma warning(disable : 4244 4305) // double <-> float conversions
+#include <stdio.h>		//Makes Stream Pointers to files
+#include <wchar.h>		//Support for w_Chars
+#include <locale>		//streamng Support for w_Chars
+#include <random>		//Randomize vector lists
 
 namespace PZSys
 {
+	Hash MyHashKey(const std::string& name)
+	{
+		return GAMEPLAY::GET_HASH_KEY((LPSTR)name.c_str());
+	}
+
+	int InGameTime()
+	{
+		return (int)GAMEPLAY::GET_GAME_TIMER();
+	}
+
 	std::string ConvertWideToANSI(const std::wstring& wstr)
 	{
-		int count = WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), (int)wstr.length(), NULL, 0, NULL, NULL);
-		std::string str(count, 0);
-		WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), -1, &str[0], count, NULL, NULL);
-		return str;
+		int Count = WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), (int)wstr.length(), NULL, 0, NULL, NULL);
+		std::string Str(Count, 0);
+		WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), -1, &Str[0], Count, NULL, NULL);
+		return Str;
 	}
 	std::string ConvertWideToUtf8(const std::wstring& wstr)
 	{
-		int count = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.length(), NULL, 0, NULL, NULL);
-		std::string str(count, 0);
-		WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], count, NULL, NULL);
-		return str;
+		int Count = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.length(), NULL, 0, NULL, NULL);
+		std::string Str(Count, 0);
+		WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &Str[0], Count, NULL, NULL);
+		return Str;
 	}
+
 	std::string GetExeFileName()
 	{
-		//char* buffer[MAX_PATH];
-		//GetModuleFileName(NULL, buffer, McAX_PATH);
+		WCHAR Buffer[MAX_PATH]{};
+		GetModuleFileNameW(NULL, Buffer, ARRAYSIZE(Buffer));
 
-		WCHAR buffer[MAX_PATH]{};
-		GetModuleFileNameW(NULL, buffer, ARRAYSIZE(buffer));
-
-		return ConvertWideToUtf8(std::wstring(buffer));
+		return ConvertWideToUtf8(std::wstring(Buffer));
 	}
-	string GetDir()
+	std::string GetDir()
 	{
-		std::string f = GetExeFileName();
-		std::string Dir = f.substr(0, f.find_last_of("\\/"));
+		std::string File = GetExeFileName();
+		std::string Dir = File.substr(0, File.find_last_of("\\/"));
 
 		return Dir;
 	}
-	string TimeDate()
+	std::string TimeDate()
 	{
-		time_t curr_time;
-		curr_time = time(NULL);
-		string tm = ctime(&curr_time);
-		tm[tm.length() - 1] = char(32);//32 is this fails testing the _s version..
-		return tm;
+		time_t CurTime;
+		CurTime = time(NULL);
+		std::string TimeStr = ctime(&CurTime);
+		TimeStr[TimeStr.length() - 1] = char(32);
+		return TimeStr;
 	}
-	bool FileExists(string filename)
+	
+	void BuildMissingDirectory(std::string dir)
+	{
+		if (CreateDirectoryA((LPSTR)dir.c_str(), NULL) || ERROR_ALREADY_EXISTS == GetLastError())
+		{		}
+	}
+	void DirectoryTest()
+	{
+		BuildMissingDirectory(DirectMain);
+		BuildMissingDirectory(DirectRandNum);
+		BuildMissingDirectory(DirectContacts);
+		BuildMissingDirectory(DirectVehicles);
+		BuildMissingDirectory(DirectMobileNet);
+		BuildMissingDirectory(DirectTranslate);
+		BuildMissingDirectory(DirectOutfitFolder);
+		BuildMissingDirectory(DirectOutfitMale);
+		BuildMissingDirectory(DirectOutfitFemale);
+	}
+	bool FileExists(const std::string& filename)
 	{
 		try
 		{
-			ifstream Infield(filename);
+			std::ifstream Infield(filename);
 			return Infield.good();
 		}
 		catch (...)
@@ -73,24 +101,11 @@ namespace PZSys
 			return false;
 		}
 	}
-
-	string sLogThis = GetDir() + "/PlayerZero/LoggerLight.txt";
-	bool startLogs = false;
-
-	bool ListContains(std::vector<int>* List, int item)
-	{
-		bool b = false;
-		for (int i = 0; i < List->size(); i++)
-		{
-			if (List->at(i) == item)
-				b = true;
-		}
-		return b;
-	}
-	bool FileRemoval(std::string filename)
+	bool FileRemoval(const std::string& filename)
 	{
 		bool Removed = false;
-		try {
+		try 
+		{
 			if (std::filesystem::remove(filename))
 				Removed = true;
 		}
@@ -100,95 +115,96 @@ namespace PZSys
 		}
 		return Removed;
 	}
-	void LoggerLight(string text)
+	void AmendFile(const std::string& file, const std::vector<std::string>& text)
 	{
-		if (startLogs && PZData::MySettings.Debugger)
-		{
-			ofstream MyFile(sLogThis, std::ios_base::app | std::ios_base::out);
-			string Mess = TimeDate() + text;
-
-			MyFile << Mess;
-			MyFile << "\n";
-
-			MyFile.close();
-		}
-		else
-		{
-			startLogs = true;
-
-			ofstream MyFile(sLogThis);
-
-			string Mess = TimeDate() + text;
-			MyFile << Mess;
-			MyFile << "\n";
-			MyFile.close();
-		}
-	}
-	void WriteFile(string file, vector<string> text)
-	{
-		ofstream MyFile(file);
+		std::ofstream FileSt(file, std::ios_base::app | std::ios_base::out);
 		for (int i = 0; i < text.size(); i++)
 		{
-			MyFile << text[i];
-			MyFile << "\n";
+			FileSt << text[i];
+			FileSt << "\n";
 		}
-		MyFile.close();
+		FileSt.close();
 	}
-	vector<string> IntoString(vector<int> text)
+	void WriteFile(const std::string& file, const std::vector<std::string>& text)
 	{
-		vector<string> output = {};
-
+		std::ofstream FileSt(file);
 		for (int i = 0; i < text.size(); i++)
-			output.push_back(std::to_string(text[i]));
-
-		return output;
+		{
+			FileSt << text[i];
+			FileSt << "\n";
+		}
+		FileSt.close();
 	}
-	vector<string> ReadFile(string fileName)
+	std::vector<std::string> ReadDirectory(const std::string& dir)
 	{
-		string myText;
-		vector<string> textList = {};
+		std::vector<std::string> Files = {};
+
+		for (const auto& entry : std::filesystem::directory_iterator(dir))
+			Files.push_back(entry.path().string());
+
+		return Files;
+	}
+	std::vector<std::string> ReadFile(const std::string& fileName)
+	{
+		std::string Text;
+		std::vector<std::string> TextList = {};
 
 		if (FileExists(fileName))
 		{
-			ifstream MyReadFile(fileName);
+			std::ifstream MyReadFile(fileName);
 
-			while (getline(MyReadFile, myText))
+			while (getline(MyReadFile, Text))
 			{
-				// Output the text from the file
-				textList.push_back(myText);
+				TextList.push_back(Text);
 			}
 			MyReadFile.close();
 		}
-
-		return textList;
+		return TextList;
 	}
-	bool StringContains(string line, string wholeString)
+	
+	bool BlogStart = true;
+	void LoggerLight(const std::string& text)
+	{
+		if (PZData::MySettings.Debugger)
+		{
+			std::string Message = TimeDate() + text;
+			if (BlogStart)
+			{
+				WriteFile(LogFile, { Message });
+				BlogStart = false;
+			}
+			else
+				AmendFile(LogFile, { Message });
+		}
+	}
+
+	bool StringContains(const std::string& line, const std::string& wholeString)
 	{
 		bool Contain = false;
-		int iLine = 0;
-		string Word = "";
+		int Line = 0;
+		std::string Word = "";
 		for (int i = 0; i < wholeString.length(); i++)
 		{
-			if (line[iLine] == wholeString[i] && iLine < line.length())
+			if (line[Line] == wholeString[i] && Line < line.length())
 			{
 				Contain = true;
 				Word += wholeString[i];
-				iLine++;
+				Line++;
 			}
-			else if (iLine > 0)
+			else if (Line > 0)
 			{
 				if (line == Word)
 					break;
 				else
 				{
-					iLine = 0;
+					Line = 0;
 					Word = "";
 
 					if (line[0] == wholeString[i])
 					{
 						Contain = true;
 						Word += wholeString[i];
-						iLine++;
+						Line++;
 					}
 				}
 			}
@@ -202,7 +218,7 @@ namespace PZSys
 
 		return Contain;
 	}
-	bool StringContains(char line, string wholeString)
+	bool StringContains(char line, const std::string& wholeString)
 	{
 		bool Contain = false;
 		for (int i = 0; i < wholeString.length(); i++)
@@ -215,239 +231,146 @@ namespace PZSys
 		}
 		return Contain;
 	}
-	int FindCharicter(char chars, string wholeString)
+	
+	int FindCharicter(const std::string& chars, const std::string& wholeString)
 	{
-		int iLine = -1;
-		for (int i = 0; i < wholeString.length(); i++)
-		{
-			if (chars == wholeString[i])
-			{
-				iLine = i;
-				break;
-			}
-		}
-		return iLine;
-	}
-	int FindCharicter(string chars, string wholeString)
-	{
-		int iLine = -1;
+		int Line = -1;
 		for (int i = 0; i < wholeString.length(); i++)
 		{
 			if (chars[0] == wholeString[i])
 			{
-				iLine = i;
+				Line = i;
 				break;
 			}
 		}
-		return iLine;
+		return Line;
 	}
-	int StingNumbersInt(string line)
+	int FindCharicter(char chars, const std::string& wholeString)
 	{
-		int iNum = 0;
-		int iTimes = 0;
-		bool bNegative = false;
+		int Line = -1;
+		for (int i = 0; i < wholeString.length(); i++)
+		{
+			if (chars == wholeString[i])
+			{
+				Line = i;
+				break;
+			}
+		}
+		return Line;
+	}
+	
+	int StingNumbersInt(const std::string& line)
+	{
+		int Num = 0;
+		int Times = 0;
+		bool Negative = false;
 		for (int i = (int)line.size(); i > -1; i--)
 		{
-			bool bSkip = false;
-			int iAdd = 0;
-			char sComp = line[i];
+			bool Skip = false;
+			int Add = 0;
+			char Comp = line[i];
 
-			if (sComp == char(45))
-				bNegative = true;
-			else if (sComp == char(49))
+			if (Comp == char(45))
+				Negative = true;
+			else if (Comp == char(49))
 			{
-				bNegative = false;
-				iAdd = 1;
+				Negative = false;
+				Add = 1;
 			}
-			else if (sComp == char(50))
+			else if (Comp == char(50))
 			{
-				bNegative = false;
-				iAdd = 2;
+				Negative = false;
+				Add = 2;
 			}
-			else if (sComp == char(51))
+			else if (Comp == char(51))
 			{
-				bNegative = false;
-				iAdd = 3;
+				Negative = false;
+				Add = 3;
 			}
-			else if (sComp == char(52))
+			else if (Comp == char(52))
 			{
-				bNegative = false;
-				iAdd = 4;
+				Negative = false;
+				Add = 4;
 			}
-			else if (sComp == char(53))
+			else if (Comp == char(53))
 			{
-				bNegative = false;
-				iAdd = 5;
+				Negative = false;
+				Add = 5;
 			}
-			else if (sComp == char(54))
+			else if (Comp == char(54))
 			{
-				bNegative = false;
-				iAdd = 6;
+				Negative = false;
+				Add = 6;
 			}
-			else if (sComp == char(55))
+			else if (Comp == char(55))
 			{
-				bNegative = false;
-				iAdd = 7;
+				Negative = false;
+				Add = 7;
 			}
-			else if (sComp == char(56))
+			else if (Comp == char(56))
 			{
-				bNegative = false;
-				iAdd = 8;
+				Negative = false;
+				Add = 8;
 			}
-			else if (sComp == char(57))
+			else if (Comp == char(57))
 			{
-				bNegative = false;
-				iAdd = 9;
+				Negative = false;
+				Add = 9;
 			}
-			else if (sComp == char(48))
+			else if (Comp == char(48))
 			{
 
 			}
 			else
-				bSkip = true;
+				Skip = true;
 
-			if (!bSkip)
+			if (!Skip)
 			{
-				if (iTimes == 0)
+				if (Times == 0)
 				{
-					iNum = iAdd;
-					iTimes = 1;
+					Num = Add;
+					Times = 1;
 				}
 				else
-					iNum += iAdd * iTimes;
-				iTimes *= 10;
+					Num += Add * Times;
+				Times *= 10;
 			}
 		}
 
-		if (bNegative)
-			iNum = iNum * (-1);
+		if (Negative)
+			Num = Num * (-1);
 
-		return iNum;
+		return Num;
 	}
-	string AfterEqual(string tag)
+	float StingNumbersFloat(const std::string& line)
 	{
-		int iSt = 0;
-		string out;
-		for (int i = 0; i < tag.length(); i++)
+		float Num = 0;
+		std::string DecOp = ".";
+		int EndIndex = -1;
+		for (int i = 0; i < line.length(); i++)
 		{
-			if (tag[i] == char(61))
+			if (line[i] == DecOp[0])
 			{
-				iSt = i + 1;
+				EndIndex = i;
 				break;
 			}
 		}
-		for (int i = iSt; i < tag.length(); i++)
-			out += tag[i];
 
-		return out;
-	}
-	string BoolToString(bool b)
-	{
-		if (b)
-			return "true";
-		else
-			return "false";
-	}
-	float StingNumbersFloat(string line)
-	{
-		float fNum = 0;
-		bool bNegative = false;
-		bool DecDone = false;
-		if (StringContains(".", line))
+		if (EndIndex >= 0 && EndIndex <= line.length())
 		{
-			int iTimes = 0;
-			for (int i = (int)line.size(); i > -1; i--)
-			{
-				bool bSkip = false;
-				float fAdd = 0;
-				char sComp = line[i];
-				if (sComp == char(45))
-					bNegative = true;
-				else if (sComp == char(46))
-				{
-					fNum = fNum / iTimes;
-					iTimes = 0;
-					bSkip = true;
-					DecDone = true;
-				}
-				else if (sComp == char(48))
-				{
-					if (DecDone)
-					{
-						DecDone = false;
-						bSkip = true;
-					}
-				}
-				else if (sComp == char(49))
-				{
-					bNegative = false;
-					fAdd = 1;
-				}
-				else if (sComp == char(50))
-				{
-					bNegative = false;
-					fAdd = 2;
-				}
-				else if (sComp == char(51))
-				{
-					bNegative = false;
-					fAdd = 3;
-				}
-				else if (sComp == char(52))
-				{
-					bNegative = false;
-					fAdd = 4;
-				}
-				else if (sComp == char(53))
-				{
-					bNegative = false;
-					fAdd = 5;
-				}
-				else if (sComp == char(54))
-				{
-					bNegative = false;
-					fAdd = 6;
-				}
-				else if (sComp == char(55))
-				{
-					bNegative = false;
-					fAdd = 7;
-				}
-				else if (sComp == char(56))
-				{
-					bNegative = false;
-					fAdd = 8;
-				}
-				else if (sComp == char(57))
-				{
-					bNegative = false;
-					fAdd = 9;
-				}
-				else
-					bSkip = true;
+			std::string AfterDec = line.substr(EndIndex + 1);
+			std::string BigNum = line.substr(0, EndIndex) + AfterDec;
+			Num = (float)StingNumbersInt(BigNum);
 
-				if (!bSkip)
-				{
-					if (iTimes == 0)
-					{
-						fNum = fAdd;
-						iTimes = 1;
-					}
-					else
-						fNum += fAdd * iTimes;
-					iTimes *= 10;
-				}
-			}
-
-			if (bNegative)
-				fNum = fNum * (-1);
+			for (int i = 0; i < AfterDec.length(); i++)
+				Num = Num / 10;
 		}
 		else
-			fNum = (float)StingNumbersInt(line);
+			Num = (float)StingNumbersInt(line);
 
-		return fNum;
+		return Num;
 	}
-	bool StringBool(string line)
+	bool StringBool(const std::string& line)
 	{
 		if (StringContains("True", line))
 			return true;
@@ -458,240 +381,136 @@ namespace PZSys
 		else
 			return false;
 	}
-	float TwoDecimal(string Number)
+
+	std::string AfterEqual(const std::string& tag)
 	{
-		int iSize = (int)Number.length();
-		string Output = "";
-		for (int i = 0; i < iSize; i++)
+		int Start = 0;
+		std::string Output;
+		for (int i = 0; i < tag.length(); i++)
 		{
-			Output += Number[i];
-			if (Number[i] == char(46) && i + 3 < Number.length())
-				iSize = i + 3;
+			if (tag[i] == char(61))
+			{
+				Start = i + 1;
+				break;
+			}
+		}
+		for (int i = Start; i < tag.length(); i++)
+			Output += tag[i];
+
+		return Output;
+	}
+	std::string BoolToString(bool b)
+	{
+		if (b)
+			return "true";
+		else
+			return "false";
+	}
+	float TwoDecimal(const std::string& number)
+	{
+		int Size = (int)number.length();
+		std::string Output = "";
+		for (int i = 0; i < Size; i++)
+		{
+			Output += number[i];
+			if (number[i] == char(46) && i + 3 < number.length())
+				Size = i + 3;
 		}
 		return StingNumbersFloat(Output);
 	}
-	int DayOfWeek()
+
+	void RandomizeIntList(std::vector<int>* numbers)
 	{
-		int iDay;
-		string t = TimeDate();
-		if (StringContains("Mon", t))
-			iDay = 1;
-		else if (StringContains("Tue", t))
-			iDay = 2;
-		else if (StringContains("Wed", t))
-			iDay = 3;
-		else if (StringContains("Thu", t))
-			iDay = 4;
-		else if (StringContains("Fri", t))
-			iDay = 5;
-		else
-			iDay = 6;
+		std::random_device Randv;
+		std::mt19937 Output(Randv());
 
-		return iDay;
+		std::shuffle(numbers->begin(), numbers->end(), Output);
 	}
-	int ReteaveAfk(string sId)
-	{
-		LoggerLight("PlayerAI.ReteaveAfk, sId == " + sId);
-
-		int iAm = -1;
-		for (int i = 0; i < (int)AFKList.size(); i++)
-		{
-			if (AFKList[i].MyIdentity == sId)
-			{
-				iAm = i;
-				break;
-			}
-		}
-		return iAm;
-	}
-	int ReteaveBrain(string sId)
-	{
-		LoggerLight("ReteaveBrain, sId == " + sId);
-
-		int iAm = -1;
-		for (int i = 0; i < (int)PedList.size(); i++)
-		{
-			if (PedList[i].MyIdentity == sId)
-			{
-				iAm = i;
-				break;
-			}
-		}
-		return iAm;
-	}
-	int RetreaveCont(string sId)
-	{
-		LoggerLight("RetreaveCont, sId == " + sId);
-
-		int iAm = -1;
-		for (int i = 0; i < (int)PhoneContacts.size(); i++)
-		{
-			if (PhoneContacts[i].YourFriend.MyIdentity == sId)
-			{
-				iAm = i;
-				break;
-			}
-		}
-		return iAm;
-	}
-	bool InLoadList(string sId)
-	{
-		bool b = false;
-
-		for (int i = 0; i < (int)MakeFrenz.size(); i++)
-		{
-			if (MakeFrenz[i].Brains.MyIdentity == sId)
-			{
-				b = true;
-				break;
-			}
-		}
-		if (!b)
-		{
-			for (int i = 0; i < (int)MakeCarz.size(); i++)
-			{
-				if (MakeCarz[i].Brains.MyIdentity == sId)
-				{
-					b = true;
-					break;
-				}
-			}
-		}
-		return b;
-	}
-	void StartScript(string scriptName, int buffer)
-	{
-		SCRIPT::REQUEST_SCRIPT((LPSTR)scriptName.c_str());
-		while (!SCRIPT::HAS_SCRIPT_LOADED((LPSTR)scriptName.c_str()))
-		{
-			SCRIPT::REQUEST_SCRIPT((LPSTR)scriptName.c_str());
-			WAIT(1);
-		}
-
-		SYSTEM::START_NEW_SCRIPT((LPSTR)scriptName.c_str(), buffer);
-		SCRIPT::SET_SCRIPT_AS_NO_LONGER_NEEDED((LPSTR)scriptName.c_str());
-	}
-
 	float RandomFloat(float min, float max)
 	{
 		if (min < max)
 		{
-			string BigNumbers = std::to_string(GAMEPLAY::GET_RANDOM_FLOAT_IN_RANGE(min, max));
-			float f = TwoDecimal(BigNumbers);
-			return f;
+			std::random_device RandoNum;
+			std::mt19937 Mt(RandoNum());
+			std::uniform_real_distribution<double> Output((double)min, (double)max);
+
+			return (float)Output(Mt);
 		}
 		else
 			return min;
 	}
-	bool ERando = false;
 	int RandomInt(int min, int max)
 	{
-		int EllRando = max - min;
-		if (EllRando > 10)
-		{
-			if (ERando)
-			{
-				min /= 2;
-				max /= 2;
-			}
-			else
-			{
-				if (min > -1 && min > max / 2)
-				{
-					min = max / 2;
-				}
-			}
-			ERando = !ERando;
-		}
-
 		if (min < max)
 		{
-			srand((unsigned)time(NULL));
+			std::random_device RandoNum;
+			std::mt19937 Mt(RandoNum());
+			std::uniform_real_distribution<double> Output((double)min, (double)max);
 
-			return min + (rand() % max);
+			return (int)Output(Mt);
 		}
 		else
 			return min;
 	}
-	vector<int> NewNums(int min, int max)
+	void NewNums(std::vector<int>* numbers, int min, int max)
 	{
-		vector<int> Nums = {};
+		numbers->clear();
 		for (int i = min; i < max + 1; i++)
-			Nums.push_back(i);
-		return Nums;
+			numbers->push_back(i);
+		RandomizeIntList(numbers);
 	}
-	bool DirTest = true;
-	int LessRandomInt(string sName, int min, int max)
+	int LessRandomInt(const std::string& file, int min, int max)
 	{
-		if (DirTest)
+		if (min < max)
 		{
-			LoggerLight("LessRandomInt, Direct Test");
-			string OutputFolder = GetDir() + "/PlayerZero/Randoms";
-			if (CreateDirectoryA((LPSTR)OutputFolder.c_str(), NULL) || ERROR_ALREADY_EXISTS == GetLastError())
-			{
-				LoggerLight("LessRandomInt, Direct Working");
-				DirTest = false;
-			}
-			else
-			{
-				LoggerLight("LessRandomInt, Direct failed");
-				if (min < max || min == max)
-				{
-
-				}
-				else
-				{
-					max = RandomInt(min, max);
-					min = max;
-				}
-			}
-
-		}
-		LoggerLight("LessRandomInt, id == " + sName + ", min == " + std::to_string(min) + ", max == " + std::to_string(max));
-		if (min < max || min == max)
-		{
-			int yourPlace = 0;
-			int yourNum = min;
-			vector<string> MyNums = ReadFile(GetDir() + "/PlayerZero/Randoms/" + sName + ".txt");
-			vector<int> NumList = {};
+			int Place = 0;
+			int Num = min;
+			std::string FileName = DirectRandNum + "/" + file + ".txt";
+			std::vector<std::string> MyNums = ReadFile(FileName);
+			std::vector<int> NumList = {};
 
 			if (MyNums.size() < 2)
-				NumList = NewNums(min, max);
+				NewNums(&NumList, min, max);
 			else
 			{
-				bool newWrite = false;
+				bool NewWrite = false;
 				if (StringContains("min=", MyNums[0]))
 				{
 					if (StingNumbersInt(MyNums[0]) != min)
-						newWrite = true;
-
-					if (StringContains("max=", MyNums[1]))
-					{
-						if (StingNumbersInt(MyNums[1]) != max)
-							newWrite = true;
-					}
+						NewWrite = true;
 				}
 				else
-					newWrite = true;
+					NewWrite = true;
+
+				if (StringContains("max=", MyNums[1]))
+				{
+					if (StingNumbersInt(MyNums[1]) != max)
+						NewWrite = true;
+				}
+				else
+					NewWrite = true;
 
 				for (int i = 2; i < MyNums.size(); i++)
 					NumList.push_back(StingNumbersInt(MyNums[i]));
 
-				if (NumList.size() == 0 || newWrite)
-					NumList = NewNums(min, max);
+				if (NumList.size() == 0 || NewWrite)
+					NewNums(&NumList, min, max);
 			}
-			yourPlace = RandomInt(0, (int)NumList.size() - 1);
-			yourNum = NumList[yourPlace];
-			NumList.erase(NumList.begin() + yourPlace);
 
-			vector<string> output = { "min=" + std::to_string(min) , "max=" + std::to_string(max) };
+			Place = RandomInt(0, (int)NumList.size() - 1);
+			Num = NumList[Place];
+			NumList.erase(NumList.begin() + Place);
+
+			std::vector<std::string> Output = { "min=" + std::to_string(min) , "max=" + std::to_string(max) };
 
 			for (int i = 0; i < NumList.size(); i++)
-				output.push_back(std::to_string(NumList[i]));
+				Output.push_back(std::to_string(NumList[i]));
 
-			WriteFile(GetDir() + "/PlayerZero/Randoms/" + sName + ".txt", output);
+			WriteFile(FileName, Output);
 
-			return yourNum;
+			LoggerLight("LessRandomInt, id == " + file + ", min == " + std::to_string(min) + ", max == " + std::to_string(max) + "Num == " + std::to_string(Num));
+
+			return Num;
 		}
 		else
 			return min;
@@ -699,64 +518,52 @@ namespace PZSys
 
 	float GetAngle(Vector3 postion1, Vector3 postion2)
 	{
-		double ang = (postion1.x * postion2.x) + (postion1.y * postion2.y);
-		double output = 0;
-		if (ang != 0)
+		double Ang = (postion1.x * postion2.x) + (postion1.y * postion2.y);
+		double Output = 0;
+		if (Ang != 0)
 		{
-			double ang1 = sqrt((postion1.x * 2) + (postion1.y * 2)) / ang;
-			double ang2 = sqrt((postion2.x * 2) + (postion2.y * 2)) / ang;
-			double output = cos(ang1 + ang2 / ang);
+			double Ang1 = sqrt((postion1.x * 2) + (postion1.y * 2)) / Ang;
+			double Ang2 = sqrt((postion2.x * 2) + (postion2.y * 2)) / Ang;
+			double Output = cos(Ang1 + Ang2 / Ang);
 		}
-		return (float)output;
+		return (float)Output;
 	}
 
 	float DistanceTo(Vector3 postion1, Vector3 postion2)
 	{
-		double num = postion2.x - postion1.x;
-		double num2 = postion2.y - postion1.y;
-		double num3 = postion2.z - postion1.z;
-		return (float)sqrt(num * num + num2 * num2 + num3 * num3);
+		double Num = postion2.x - postion1.x;
+		double Num2 = postion2.y - postion1.y;
+		double Num3 = postion2.z - postion1.z;
+		return (float)sqrt(Num * Num + Num2 * Num2 + Num3 * Num3);
 	}
 	float DistanceTo(Entity entity1, Entity entity2)
 	{
-		Vector3 postion1 = ENTITY::GET_ENTITY_COORDS(entity1, false);
-		Vector3 postion2 = ENTITY::GET_ENTITY_COORDS(entity2, false);
+		Vector3 Postion1 = ENTITY::GET_ENTITY_COORDS(entity1, false);
+		Vector3 Postion2 = ENTITY::GET_ENTITY_COORDS(entity2, false);
 
-		return DistanceTo(postion1, postion2);
+		return DistanceTo(Postion1, Postion2);
 	}
 	float DistanceTo(Entity entity1, Vector3 postion2)
 	{
-		Vector3 postion1 = ENTITY::GET_ENTITY_COORDS(entity1, false);
+		Vector3 Postion1 = ENTITY::GET_ENTITY_COORDS(entity1, false);
 
-		return DistanceTo(postion1, postion2);
+		return DistanceTo(Postion1, postion2);
 	}
-	float DistanceTo(PZclass::Vector4 postion1, Vector3 postion2)
+	float DistanceTo(Vector4 postion1, Vector3 postion2)
 	{
-		double num = postion2.x - postion1.X;
-		double num2 = postion2.y - postion1.Y;
-		double num3 = postion2.z - postion1.Z;
-		return (float)sqrt(num * num + num2 * num2 + num3 * num3);
+		double Num = postion2.x - postion1.X;
+		double Num2 = postion2.y - postion1.Y;
+		double Num3 = postion2.z - postion1.Z;
+		return (float)sqrt(Num * Num + Num2 * Num2 + Num3 * Num3);
 	}
-	float DistanceTo(PZclass::Vector4 postion1, PZclass::Vector4 postion2)
+	float DistanceTo(Vector4 postion1, Vector4 postion2)
 	{
-		double num = postion2.X - postion1.X;
-		double num2 = postion2.Y - postion1.Y;
-		double num3 = postion2.Z - postion1.Z;
-		return (float)sqrt(num * num + num2 * num2 + num3 * num3);
+		double Num = postion2.X - postion1.X;
+		double Num2 = postion2.Y - postion1.Y;
+		double Num3 = postion2.Z - postion1.Z;
+		return (float)sqrt(Num * Num + Num2 * Num2 + Num3 * Num3);
 	}
 
-	Vector3 EntityPosition(Entity Object)
-	{
-		return  ENTITY::GET_ENTITY_COORDS(Object, 0);
-	}
-	Vector3 PlayerPosi()
-	{
-		return EntityPosition(PLAYER::PLAYER_PED_ID());
-	}
-	Vector3 MyWayPoint()
-	{
-		return UI::GET_BLIP_INFO_ID_COORD(UI::GET_FIRST_BLIP_INFO_ID(8));
-	}
 	Vector3 NewVector3(float X, float Y, float Z)
 	{
 		Vector3 NewVec = Vector3();
@@ -766,18 +573,44 @@ namespace PZSys
 
 		return NewVec;
 	}
-	Vector3 RightOfEntity(Entity Object)
+	Vector3 NewVector3(Vector4 pos4)
 	{
-		Vector3 Pos = ENTITY::GET_ENTITY_ROTATION(Object, 00);
-		const double PI = 3.14259;
-		double num = cos((double)Pos.y * (PI / 180.0));
-		double num2 = cos((double)(0 - Pos.z) * (PI / 180.0)) * num;
-		double num3 = sin((double)Pos.z * (PI / 180.0)) * num;
-		double num4 = sin((double)(0 - Pos.y) * (PI / 180.0));
+		Vector3 NewVec = Vector3();
+		NewVec.x = pos4.X;
+		NewVec.y = pos4.Y;
+		NewVec.z = pos4.Z;
 
-		Pos.x = (float)num2;
-		Pos.y = (float)num3;
-		Pos.z = (float)num4;
+		return NewVec;
+	}
+	Vector3 EntityPosition(Entity ent)
+	{
+		return  ENTITY::GET_ENTITY_COORDS(ent, 0);
+	}
+	Vector3 PlayerPosi()
+	{
+		return EntityPosition(PLAYER::PLAYER_PED_ID());
+	}
+	Vector3 PlayerPosi(float above)
+	{
+		Vector3 HighAb = PlayerPosi();
+		return NewVector3(HighAb.x, HighAb.y, HighAb.z + above);
+	}
+	Vector3 MyWayPoint()
+	{
+		return UI::GET_BLIP_INFO_ID_COORD(UI::GET_FIRST_BLIP_INFO_ID(8));
+	}
+	Vector3 RightOfEntity(Entity ent)
+	{
+		Vector3 Pos = ENTITY::GET_ENTITY_ROTATION(ent, 00);
+		const double PI = 3.14259;
+		double Num = cos((double)Pos.y * (PI / 180.0));
+		double Num2 = cos((double)(0 - Pos.z) * (PI / 180.0)) * Num;
+		double Num3 = sin((double)Pos.z * (PI / 180.0)) * Num;
+		double Num4 = sin((double)(0 - Pos.y) * (PI / 180.0));
+
+		Pos.x = (float)Num2;
+		Pos.y = (float)Num3;
+		Pos.z = (float)Num4;
 
 		return Pos;
 	}
@@ -828,7 +661,14 @@ namespace PZSys
 		return vec;
 	}
 
-	PZclass::Vector4 InAreaOf(PZclass::Vector4  area, float minDist, float maxDist)
+	Vector4 EntityPositionV4(Entity ent)
+	{
+		Vector3 Pos = EntityPosition(ent);
+		return Vector4(Pos.x, Pos.y, Pos.z, ENTITY::GET_ENTITY_HEADING(ent));
+	}
+	
+	float InAreaOf_fDir = 0.0f;
+	Vector4 InAreaOf(Vector4 area, float minDist, float maxDist)
 	{
 		float X = RandomFloat(maxDist * -1, maxDist);
 		float Y = RandomFloat(maxDist * -1, maxDist);
@@ -843,21 +683,281 @@ namespace PZSys
 		else if (Y < 1.0 && Y > minDist * -1)
 			Y = minDist * -1;
 
-		float x = area.X + X;
-		float y = area.Y + Y;
-		float z = area.Z;
-		float r = area.R;
+		float Ax = area.X + X;
+		float Ay = area.Y + Y;
+		float Az = area.Z;
+		float Ar = area.R;
 
-		return PZclass::Vector4(x, y, z, r);
+		return Vector4(Ax, Ay, Az, Ar);
 	}
-	PZclass::Vector4 InAreaOf(Vector3 area, float minDist, float maxDist)
+	Vector4 InAreaOf(Vector3 area, float minDist, float maxDist)
 	{
-		return InAreaOf(PZclass::Vector4(area.x, area.y, area.z, 0.0), minDist, maxDist);
+		InAreaOf_fDir += (float)LessRandomInt("AngleSaxon", 20, 65);
+		if (InAreaOf_fDir > 360.0f)
+			InAreaOf_fDir = (float)LessRandomInt("AngleSaxon", 20, 65);
+
+		return InAreaOf(Vector4(area.x, area.y, area.z, InAreaOf_fDir), minDist, maxDist);
 	}
-	PZclass::Vector4 GetPosV4(Entity Object)
+	Vector3 InAreaOfV3(Vector3 area, float minDist, float maxDist)
 	{
-		Vector3 Pos = EntityPosition(Object);
-		return PZclass::Vector4(Pos.x, Pos.y, Pos.z, ENTITY::GET_ENTITY_HEADING(Object));
+		Vector4 VA = InAreaOf(Vector4(area.x, area.y, area.z, InAreaOf_fDir), minDist, maxDist);
+
+		return NewVector3(VA);
+	}
+
+	const std::vector<Vector4> SanLoocIndex = {
+		Vector4(-812.1608f, -2201.21f, 16.7955f, 0.0f),
+		Vector4(211.7755f, -3045.787f, 5.089411f, 0.0f),
+		Vector4(990.5366f, -3114.517f, 5.426713f, 0.0f),
+		Vector4(-1230.986f, -1088.824f, 7.947563f, 0.0f),
+		Vector4(592.1391f, -1825.843f, 24.36324f, 0.0f),
+		Vector4(17.29186f, -805.5605f, 47.16209f, 0.0f),
+		Vector4(2042.241f, -2126.156f, 116.9319f, 0.0f),
+		Vector4(1602.962f, -550.4477f, 168.798f, 0.0f),
+		Vector4(-747.7878f, 200.8658f, 75.26504f, 0.0f),
+		Vector4(615.4108f, 266.308f, 102.7443f, 0.0f),
+		Vector4(-2812.112f, 637.9633f, 104.826f, 0.0f),
+		Vector4(-402.1792f, 2294.639f, 229.0287f, 0.0f),
+		Vector4(2260.562f, 1439.681f, 138.9774f, 0.0f),
+		Vector4(1622.083f, 4018.104f, 37.64009f, 0.0f),
+		Vector4(-1027.057f, 5541.436f, 20.38375f, 0.0f),
+		Vector4(1272.17f, 6244.464f, 115.8106f, 0.0f),
+	};
+	static std::vector<Vector3> LastDropVeh = {};
+	static std::vector<Vector3> LastDropPed = {};
+	bool ItsTooNear(const std::vector<Vector3>& checkList, Vector4 spot, float minDist)
+	{
+		LoggerLight("ItsTooNear");
+		bool ItsNear = true;
+		if ((int)checkList.size() > 0)
+		{
+			int NotNear = 0;
+			for (int i = 0; i < (int)checkList.size(); i++)
+			{
+				if (DistanceTo(spot, checkList[i]) < minDist)
+					break;
+				else
+					NotNear++;
+			}
+
+			if (NotNear == (int)checkList.size())
+				ItsNear = false;
+		}
+		else
+			ItsNear = false;
+
+		return ItsNear;
+	}
+	void NearestToo(Vector4* pos, const std::vector<Vector4>& placeList, const std::vector<Vector3>& checkList, float minDist)
+	{
+		LoggerLight("NearestToo");
+
+		if (pos != nullptr)
+		{
+			float FAr = 9000.0f;
+			int Near = 0;
+			for (int i = 0; i < (int)placeList.size(); i++)
+			{
+				if (DistanceTo(*pos, placeList[i]) < FAr && !ItsTooNear(checkList, placeList[i], minDist))
+				{
+					FAr = DistanceTo(*pos, placeList[i]);
+					Near = i;
+				}
+			}
+
+			if (Near < (int)placeList.size())
+				*pos = placeList[Near];
+		}
+		else
+			LoggerLight("NearestToo pos == nullptr");
+	}	
+	Vector4 VehPlace(Vector3 local)
+	{
+		LoggerLight("VehPlace");
+
+		Vector4 Location = Vector4(local);
+		int List = 0;
+		float Dis = 4000.0f;
+		for (int i = 0; i < SanLoocIndex.size(); i++)
+		{
+			if (DistanceTo(SanLoocIndex[i], local) < Dis)
+			{
+				Dis = DistanceTo(SanLoocIndex[i], local);
+				List = i;
+			}
+		}
+		
+		if (List == 0)
+			NearestToo(&Location, VehDrops01, LastDropVeh, 20.0f);
+		else if (List == 1)
+			NearestToo(&Location, VehDrops02, LastDropVeh, 20.0f);
+		else if (List == 2)
+			NearestToo(&Location, VehDrops03, LastDropVeh, 20.0f);
+		else if (List == 3)
+			NearestToo(&Location, VehDrops04, LastDropVeh, 20.0f);
+		else if (List == 4)
+			NearestToo(&Location, VehDrops05, LastDropVeh, 20.0f);
+		else if (List == 5)
+			NearestToo(&Location, VehDrops06, LastDropVeh, 20.0f);
+		else if (List == 6)
+			NearestToo(&Location, VehDrops07, LastDropVeh, 20.0f);
+		else if (List == 7)
+			NearestToo(&Location, VehDrops08, LastDropVeh, 20.0f);
+		else if (List == 8)
+			NearestToo(&Location, VehDrops09, LastDropVeh, 20.0f);
+		else if (List == 9)
+			NearestToo(&Location, VehDrops10, LastDropVeh, 20.0f);
+		else if (List == 10)
+			NearestToo(&Location, VehDrops11, LastDropVeh, 20.0f);
+		else if (List == 11)
+			NearestToo(&Location, VehDrops12, LastDropVeh, 20.0f);
+		else if (List == 12)
+			NearestToo(&Location, VehDrops13, LastDropVeh, 20.0f);
+		else if (List == 13)
+			NearestToo(&Location, VehDrops14, LastDropVeh, 20.0f);
+		else if (List == 14)
+			NearestToo(&Location, VehDrops15, LastDropVeh, 20.0f);
+		else
+			NearestToo(&Location, VehDrops16, LastDropVeh, 20.0f);
+
+		return Location;
+	}
+	Vector4 PedPlace(Vector3 local)
+	{
+		LoggerLight("PedPlace");
+
+		Vector4 Location = Vector4(local);
+		int List = 0;
+		float Dis = 4000.0f;
+		for (int i = 0; i < SanLoocIndex.size(); i++)
+		{
+			if (DistanceTo(SanLoocIndex[i], local) < Dis)
+			{
+				Dis = DistanceTo(SanLoocIndex[i], local);
+				List = i;
+			}
+		}
+		
+		if (List == 0)
+			NearestToo(&Location, PedDrops01, LastDropPed, 10.0f);
+		else if (List == 1)
+			NearestToo(&Location, PedDrops02, LastDropPed, 10.0f);
+		else if (List == 2)
+			NearestToo(&Location, PedDrops03, LastDropPed, 10.0f);
+		else if (List == 3)
+			NearestToo(&Location, PedDrops04, LastDropPed, 10.0f);
+		else if (List == 4)
+			NearestToo(&Location, PedDrops05, LastDropPed, 10.0f);
+		else if (List == 5)
+			NearestToo(&Location, PedDrops06, LastDropPed, 10.0f);
+		else if (List == 6)
+			NearestToo(&Location, PedDrops07, LastDropPed, 10.0f);
+		else if (List == 7)
+			NearestToo(&Location, PedDrops08, LastDropPed, 10.0f);
+		else if (List == 8)
+			NearestToo(&Location, PedDrops09, LastDropPed, 10.0f);
+		else if (List == 9)
+			NearestToo(&Location, PedDrops10, LastDropPed, 10.0f);
+		else if (List == 10)
+			NearestToo(&Location, PedDrops11, LastDropPed, 10.0f);
+		else if (List == 11)
+			NearestToo(&Location, PedDrops12, LastDropPed, 10.0f);
+		else if (List == 12)
+			NearestToo(&Location, PedDrops13, LastDropPed, 10.0f);
+		else if (List == 13)
+			NearestToo(&Location, PedDrops14, LastDropPed, 10.0f);
+		else if (List == 14)
+			NearestToo(&Location, PedDrops15, LastDropPed, 10.0f);
+		else
+			NearestToo(&Location, PedDrops16, LastDropPed, 10.0f);
+
+		return Location;
+	}
+	Vector4 FindPedSpPoint()
+	{
+		Vector4 Pos = InAreaOf(PlayerPosi(), 30.0f, 60.0f);
+		Vector3 PlayPos = NewVector3(Pos.X, Pos.Y, Pos.Z);
+
+		if (FileExists(ZeroYank))
+			NearestToo(&Pos, YankSpPoint, LastDropPed, 10.0f);
+		else if (FileExists(ZeroCayo))
+			NearestToo(&Pos, CayoSpPoint, LastDropPed, 10.0f);
+		else
+			Pos = PedPlace(PlayPos);
+
+		LastDropPed.push_back(NewVector3(Pos.X, Pos.Y, Pos.Z));
+		if (LastDropPed.size() > 15)
+			LastDropPed.erase(LastDropPed.begin());
+
+		return Pos;
+	}
+	Vector4 FindVehSpPoint(int prefVeh)
+	{
+		Vector4 Pos = InAreaOf(PlayerPosi(), 45.0f, 90.0f);
+		Vector3 PlayPos = NewVector3(Pos.X, Pos.Y, Pos.Z);
+
+		if (prefVeh == 5 || prefVeh == 3 || prefVeh == 8 || prefVeh == 9)
+		{
+			PlayPos.z += 1200.0f;
+			Pos = InAreaOf(PlayPos, 155.0f, 1400.0f);
+			while (ItsTooNear(LastDropVeh, Pos, 50.0f))
+			{
+				Pos = InAreaOf(PlayPos, 155.0f, 1400.0f);
+				WAIT(10);
+			}
+		}
+		else if (prefVeh == 2 || prefVeh == 4)
+		{
+			PlayPos.z += 600.0f;
+			Pos = InAreaOf(PlayPos, 155.0f, 500.0f);
+			while (ItsTooNear(LastDropVeh, Pos, 30.0f))
+			{
+				Pos = InAreaOf(PlayPos, 155.0f, 1400.0f);
+				WAIT(10);
+			}
+		}
+		else if (FileExists(ZeroYank))
+			NearestToo(&Pos, YankVhPoint, LastDropVeh, 20.0f);
+		else if (FileExists(ZeroCayo))
+			NearestToo(&Pos, CayoVhPoint, LastDropVeh, 20.0f);
+		else
+			Pos = VehPlace(PlayPos);
+
+		LastDropVeh.push_back(NewVector3(Pos.X, Pos.Y, Pos.Z));
+		if (LastDropVeh.size() > 15)
+			LastDropVeh.erase(LastDropVeh.begin());
+
+		return Pos;
+	}
+
+	Vector3 RandomLocation()
+	{
+		if (FileExists(ZeroYank))
+			return NewVector3(YankVhPoint[LessRandomInt("YankLocRand", 0, (int)YankVhPoint.size() -1)]);
+		else if (FileExists(ZeroCayo))
+			return NewVector3(CayoVhPoint[LessRandomInt("CayoLocRand", 0, (int)CayoVhPoint.size() - 1)]);
+		else
+		{
+			Vector3 V3P = PlayerPosi();
+			V3P.x *= -1;
+			V3P.y *= -1;
+			Vector4 VP = VehPlace(V3P);
+			return NewVector3(VP);
+		}
+	}
+	
+	Vehicle GetPedsVehicle(Ped peddy)
+	{
+		Vehicle Pv = NULL;
+		if ((bool)PED::IS_PED_IN_ANY_VEHICLE(peddy, 0))
+		{
+			Pv = PED::GET_VEHICLE_PED_IS_IN(peddy, false);
+		}
+		return Pv;
+	}
+	Vehicle GetPlayersVehicle()
+	{
+		return GetPedsVehicle(PLAYER::PLAYER_PED_ID());
 	}
 
 	void GhostTown()
@@ -865,336 +965,51 @@ namespace PZSys
 		Vehicle PlayersVeh = PED::GET_VEHICLE_PED_IS_IN(PLAYER::PLAYER_PED_ID(), false);
 
 		const int VEH_ARR_SIZE = 1024;
-		Vehicle vehicles[VEH_ARR_SIZE];
-		int Vehcount = worldGetAllVehicles(vehicles, VEH_ARR_SIZE);
+		Vehicle VehArray[VEH_ARR_SIZE];
+		int Vehcount = worldGetAllVehicles(VehArray, VEH_ARR_SIZE);
 
 		for (int i = 0; i < Vehcount; i++)
 		{
-			Vehicle Vent = vehicles[i];
-			if (Vent != NULL && ENTITY::DOES_ENTITY_EXIST(Vent))
+			Vehicle Vic = VehArray[i];
+			if (Vic != NULL && ENTITY::DOES_ENTITY_EXIST(Vic))
 			{
-				if (ENTITY::IS_ENTITY_A_MISSION_ENTITY(Vent) || Vent == PlayersVeh)
+				if (ENTITY::IS_ENTITY_A_MISSION_ENTITY(Vic) || Vic == PlayersVeh)
 				{
 
 				}
 				else
 				{
-					ENTITY::SET_ENTITY_AS_MISSION_ENTITY(Vent, true, true);
-					VEHICLE::DELETE_VEHICLE(&Vent);
+					ENTITY::SET_ENTITY_AS_MISSION_ENTITY(Vic, true, true);
+					VEHICLE::DELETE_VEHICLE(&Vic);
 				}
 			}
 		}
 
 		const int PED_ARR_SIZE = 1024;
-		Ped Pedds[PED_ARR_SIZE];
-		int Pedcount = worldGetAllPeds(Pedds, PED_ARR_SIZE);
+		Ped PedArray[PED_ARR_SIZE];
+		int Pedcount = worldGetAllPeds(PedArray, PED_ARR_SIZE);
 
 		for (int i = 0; i < Pedcount; i++)
 		{
-			Ped Pent = Pedds[i];
-			if (Pent != NULL && ENTITY::DOES_ENTITY_EXIST(Pent))
+			Ped Peddy = PedArray[i];
+			if (Peddy != NULL && ENTITY::DOES_ENTITY_EXIST(Peddy))
 			{
-				if (ENTITY::IS_ENTITY_A_MISSION_ENTITY(Pent))
+				if (ENTITY::IS_ENTITY_A_MISSION_ENTITY(Peddy))
 				{
 
 				}
 				else
 				{
-					ENTITY::SET_ENTITY_AS_MISSION_ENTITY(Pent, true, true);
-					PED::DELETE_PED(&Pent);
+					ENTITY::SET_ENTITY_AS_MISSION_ENTITY(Peddy, true, true);
+					PED::DELETE_PED(&Peddy);
 				}
 			}
 		}
 	}
 
-	static std::vector<Vector3> LastDrop = {};
-	bool NearThisList(PZclass::Vector4 postion1)
+	void AddMarker(Entity ent)
 	{
-		bool b = false;
-		for (int i = 0; i < LastDrop.size(); i++)
-		{
-			if (15.0f > DistanceTo(postion1, LastDrop.at(i)))
-				b = true;
-		}
-		return b;
-	}
-	bool NearThisList(Entity postion1)
-	{
-		return NearThisList(GetPosV4(postion1));
-	}
-
-	const std::vector<PZclass::Vector4> SanLoocIndex = {
-		PZclass::Vector4(-812.1608f, -2201.21f, 16.7955f, 0.0f),
-		PZclass::Vector4(211.7755f, -3045.787f, 5.089411f, 0.0f),
-		PZclass::Vector4(990.5366f, -3114.517f, 5.426713f, 0.0f),
-		PZclass::Vector4(-1230.986f, -1088.824f, 7.947563f, 0.0f),
-		PZclass::Vector4(592.1391f, -1825.843f, 24.36324f, 0.0f),
-		PZclass::Vector4(17.29186f, -805.5605f, 47.16209f, 0.0f),
-		PZclass::Vector4(2042.241f, -2126.156f, 116.9319f, 0.0f),
-		PZclass::Vector4(1602.962f, -550.4477f, 168.798f, 0.0f),
-		PZclass::Vector4(-747.7878f, 200.8658f, 75.26504f, 0.0f),
-		PZclass::Vector4(615.4108f, 266.308f, 102.7443f, 0.0f),
-		PZclass::Vector4(-2812.112f, 637.9633f, 104.826f, 0.0f),
-		PZclass::Vector4(-402.1792f, 2294.639f, 229.0287f, 0.0f),
-		PZclass::Vector4(2260.562f, 1439.681f, 138.9774f, 0.0f),
-		PZclass::Vector4(1622.083f, 4018.104f, 37.64009f, 0.0f),
-		PZclass::Vector4(-1027.057f, 5541.436f, 20.38375f, 0.0f),
-		PZclass::Vector4(1272.17f, 6244.464f, 115.8106f, 0.0f),
-	};
-	
-	PZclass::Vector4 FindMySpot(const std::vector<PZclass::Vector4>* list, Vector3 local)
-	{
-		int iList = 0;
-		float fDis = 4000.0f;
-		PZclass::Vector4 YourVec = PZclass::Vector4(0.0f, 0.0f, 0.0f, 0.0f);
-		for (int i = 0; i < list->size(); i++)
-		{
-			if (DistanceTo(list->at(i), local) < fDis && !NearThisList(list->at(i)))
-			{
-				fDis = DistanceTo(list->at(i), local);
-				iList = i;
-			}
-		}
-		return list->at(iList);
-	}
-	PZclass::Vector4 VehPlace(Vector3 local)
-	{
-		LoggerLight("VehPlace");
-		int iList = -1;
-		float fDis = 4000.0f;
-		for (int i = 0; i < SanLoocIndex.size(); i++)
-		{
-			if (DistanceTo(SanLoocIndex[i], local) < fDis)
-			{
-				fDis = DistanceTo(SanLoocIndex[i], local);
-				iList = i;
-			}
-		}
-		
-		if (iList == 0)
-			return FindMySpot(&VehDrops01, local);
-		else if (iList == 1)
-			return FindMySpot(&VehDrops02, local);
-		else if (iList == 2)
-			return FindMySpot(&VehDrops03, local);
-		else if (iList == 3)
-			return FindMySpot(&VehDrops04, local);
-		else if (iList == 4)
-			return FindMySpot(&VehDrops05, local);
-		else if (iList == 5)
-			return FindMySpot(&VehDrops06, local);
-		else if (iList == 6)
-			return FindMySpot(&VehDrops07, local);
-		else if (iList == 7)
-			return FindMySpot(&VehDrops08, local);
-		else if (iList == 8)
-			return FindMySpot(&VehDrops09, local);
-		else if (iList == 9)
-			return FindMySpot(&VehDrops10, local);
-		else if (iList == 10)
-			return FindMySpot(&VehDrops11, local);
-		else if (iList == 11)
-			return FindMySpot(&VehDrops12, local);
-		else if (iList == 12)
-			return FindMySpot(&VehDrops13, local);
-		else if (iList == 13)
-			return FindMySpot(&VehDrops14, local);
-		else if (iList == 14)
-			return FindMySpot(&VehDrops15, local);
-		else if (iList == 15)
-			return FindMySpot(&VehDrops16, local);
-		else
-			return PZclass::Vector4(0.0f, 0.0f, 0.0f, 0.0f);
-	}
-	PZclass::Vector4 PedPlace(Vector3 local)
-	{
-		LoggerLight("PedPlace");
-		int iList = -1;
-		float fDis = 4000.0f;
-		for (int i = 0; i < SanLoocIndex.size(); i++)
-		{
-			if (DistanceTo(SanLoocIndex[i], local) < fDis)
-			{
-				fDis = DistanceTo(SanLoocIndex[i], local);
-				iList = i;
-			}
-		}
-		
-		if (iList == 0)
-			return FindMySpot(&PedDrops01, local);
-		else if (iList == 1)
-			return FindMySpot(&PedDrops02, local);
-		else if (iList == 2)
-			return FindMySpot(&PedDrops03, local);
-		else if (iList == 3)
-			return FindMySpot(&PedDrops04, local);
-		else if (iList == 4)
-			return FindMySpot(&PedDrops05, local);
-		else if (iList == 5)
-			return FindMySpot(&PedDrops06, local);
-		else if (iList == 6)
-			return FindMySpot(&PedDrops07, local);
-		else if (iList == 7)
-			return FindMySpot(&PedDrops08, local);
-		else if (iList == 8)
-			return FindMySpot(&PedDrops09, local);
-		else if (iList == 9)
-			return FindMySpot(&PedDrops10, local);
-		else if (iList == 10)
-			return FindMySpot(&PedDrops11, local);
-		else if (iList == 11)
-			return FindMySpot(&PedDrops12, local);
-		else if (iList == 12)
-			return FindMySpot(&PedDrops13, local);
-		else if (iList == 13)
-			return FindMySpot(&PedDrops14, local);
-		else if (iList == 14)
-			return FindMySpot(&PedDrops15, local);
-		else if (iList == 15)
-			return FindMySpot(&PedDrops16, local);
-		else
-			return PZclass::Vector4(0.0f, 0.0f, 0.0f, 0.0f);
-	}
-
-	int FindAirSpots()
-	{
-		int iNear = -1;
-		Vector3 PlayPos = PlayerPosi();
-		float fIsh = 9999.0;
-		for (int i = 0; i < (int)AirSpots.size(); i++)
-		{
-			float f = DistanceTo(AirSpots[i], PlayerPosi());
-			if (f < fIsh)
-			{
-				iNear = i;
-				fIsh = f;
-			}
-		}
-		return iNear;
-	}
-
-	PZclass::Vector4 FindPedSpPoint(PZclass::Vector4 Pos)
-	{
-		float fAr = 4000.0f;
-		int Near = -1;
-
-		if (FileExists(ZeroYank))
-		{
-			for (int i = 0; i < (int)YankSpPoint.size(); i++)
-			{
-				if (DistanceTo(Pos, YankSpPoint[i]) < fAr && !NearThisList(YankSpPoint[i]))
-				{
-					fAr = DistanceTo(Pos, YankSpPoint[i]);
-					Near = i;
-				}
-			}
-
-			LastDrop.push_back(NewVector3(YankSpPoint[Near].X, YankSpPoint[Near].Y, YankSpPoint[Near].Z));
-			if (LastDrop.size() > 15)
-				LastDrop.erase(LastDrop.begin());
-
-			return YankSpPoint[Near];
-		}
-		else if (FileExists(ZeroCayo))
-		{
-			for (int i = 0; i < (int)CayoSpPoint.size(); i++)
-			{
-				if (DistanceTo(Pos, CayoSpPoint[i]) < fAr && !NearThisList(CayoSpPoint[i]))
-				{
-					fAr = DistanceTo(Pos, CayoSpPoint[i]);
-					Near = i;
-				}
-			}
-
-			LastDrop.push_back(NewVector3(CayoSpPoint[Near].X, CayoSpPoint[Near].Y, CayoSpPoint[Near].Z));
-			if (LastDrop.size() > 15)
-				LastDrop.erase(LastDrop.begin());
-
-			return CayoSpPoint[Near];
-		}
-		else
-		{
-			PZclass::Vector4 PlaceHere = PedPlace(PlayerPosi());
-
-			LastDrop.push_back(NewVector3(PlaceHere.X, PlaceHere.Y, PlaceHere.Z));
-			if (LastDrop.size() > 15)
-				LastDrop.erase(LastDrop.begin());
-
-			return PlaceHere;
-		}
-	}
-	PZclass::Vector4 FindVehSpPoint(PZclass::Vector4 Pos)
-	{
-		float fAr = 4000.0f;
-		int Near = -1;
-
-		if (FileExists(ZeroYank))
-		{
-			if (MakeCarz[MakeCarz.size() - 1].Brains.IsPlane || MakeCarz[MakeCarz.size() - 1].Brains.IsHeli)
-				return PZclass::Vector4(3280.166f, -4648.12f, 550.0f, 82.46803f);
-			else
-			{
-				for (int i = 0; i < (int)YankVhPoint.size(); i++)
-				{
-					if (DistanceTo(Pos, YankVhPoint[i]) < fAr && !NearThisList(YankVhPoint[i]))
-					{
-						fAr = DistanceTo(Pos, YankVhPoint[i]);
-						Near = i;
-					}
-				}
-				LastDrop.push_back(NewVector3(YankVhPoint[Near].X, YankVhPoint[Near].Y, YankVhPoint[Near].Z));
-				if (LastDrop.size() > 15)
-					LastDrop.erase(LastDrop.begin());
-
-				return YankVhPoint[Near];
-			}
-		}
-		else if (FileExists(ZeroCayo))
-		{
-			if (MakeCarz[MakeCarz.size() - 1].Brains.IsPlane || MakeCarz[MakeCarz.size() - 1].Brains.IsHeli)
-				return InAreaOf(AirSpots[FindAirSpots()], 35.0, 300.0);
-			else
-			{
-				for (int i = 0; i < (int)CayoVhPoint.size(); i++)
-				{
-					if (DistanceTo(Pos, CayoVhPoint[i]) < fAr && !NearThisList(CayoVhPoint[i]))
-					{
-						fAr = DistanceTo(Pos, CayoVhPoint[i]);
-						Near = i;
-					}
-				}
-				LastDrop.push_back(NewVector3(CayoVhPoint[Near].X, CayoVhPoint[Near].Y, CayoVhPoint[Near].Z));
-				if (LastDrop.size() > 15)
-					LastDrop.erase(LastDrop.begin());
-
-				return CayoVhPoint[Near];
-			}
-		}
-		else
-		{
-			if (MakeCarz[MakeCarz.size() - 1].Brains.IsPlane || MakeCarz[MakeCarz.size() - 1].Brains.IsHeli)
-				return InAreaOf(AirSpots[FindAirSpots()], 35.0, 300.0);
-			else
-			{
-				PZclass::Vector4 PlaceHere = VehPlace(PlayerPosi());
-
-				LastDrop.push_back(NewVector3(PlaceHere.X, PlaceHere.Y, PlaceHere.Z));
-				if (LastDrop.size() > 15)
-					LastDrop.erase(LastDrop.begin());
-
-				return PlaceHere;
-			}
-		}
-	}
-
-	Hash MyHashKey(string name)
-	{
-		return GAMEPLAY::GET_HASH_KEY((LPSTR)name.c_str());
-	}
-
-	void AddMarker(Entity object)
-	{
-		PZclass::Vector4 Entpos = GetPosV4(object);
+		Vector4 Entpos = EntityPositionV4(ent);
 		GRAPHICS::DRAW_MARKER(2, Entpos.X, Entpos.Y, Entpos.Z + 1.0f, 0.0f, 0.0f, 0.0f, 180.0f, 0.0f, Entpos.R, 0.2f, 0.2f, 0.2f, 236, 240, 41, 255, false, true, 2, true, 0, 0, false);
 		/*
 		void DRAW_MARKER(int type, float posX, float posY, float posZ, float dirX, float dirY, float dirZ, float rotX, float rotY, float rotZ, float scaleX, float scaleY, float scaleZ, int red, int green, int blue, int alpha, BOOL bobUpAndDown, BOOL faceCamera, int p19, BOOL rotate, char* textureDict, char* textureName, BOOL drawOnEnts) // 28477EC23D892089 48D84A02
@@ -1266,60 +1081,69 @@ namespace PZSys
 		his is what I used to draw an amber downward pointing chevron "V", has to be redrawn every frame.The 180 is for 180 degrees rotation around the Y axis, the 50 is alpha, assuming max is 100, but it will accept 255.
 		*/
 	}
-	void menu_beep()
-	{
-		AUDIO::PLAY_SOUND_FRONTEND(-1, "NAV_UP_DOWN", "HUD_FRONTEND_DEFAULT_SOUNDSET", 0);
-	}
-	void ButtonDisabler(int LButt)
-	{
-		//CONTROLS::DISABLE_ALL_CONTROL_ACTIONS(0);
-		CONTROLS::DISABLE_CONTROL_ACTION(1, LButt, true);
-	}
-	bool WhileButtonDown(int CButt, bool bDisable)
-	{
-		if (bDisable)
-			ButtonDisabler(CButt); ;
 
-		bool bButt = (bool)CONTROLS::IS_DISABLED_CONTROL_PRESSED(0, CButt);
+	int ReteaveAfk(const std::string& id)
+	{
+		LoggerLight("ReteaveAfk, id == " + id);
 
-		if (bButt)
+		int Id = -1;
+		for (int i = 0; i < (int)AFKList.size(); i++)
 		{
-			while (!(bool)CONTROLS::IS_DISABLED_CONTROL_JUST_RELEASED(0, CButt))
-				WAIT(1);
+			if (AFKList[i].MyIdentity == id)
+			{
+				Id = i;
+				break;
+			}
 		}
-		return bButt;
+		return Id;
 	}
-	bool ButtonDown(int CButt, bool bDisable)
+	int ReteaveBrain(const std::string& id)
 	{
-		if (bDisable)
-			ButtonDisabler(CButt);
-		return (bool)CONTROLS::IS_DISABLED_CONTROL_PRESSED(0, CButt);
-	}
-	int AddScreenText(int font, string caption, float textLeftScaled, float lineTopScaled, float lineHeightScaled, float text_scale, int text_col[4])
-	{
-		// text upper part
-		UI::SET_TEXT_FONT(font);
-		UI::SET_TEXT_SCALE(0.0, text_scale);
-		UI::SET_TEXT_COLOUR(text_col[0], text_col[1], text_col[2], text_col[3]);
-		UI::SET_TEXT_CENTRE(0);
-		UI::SET_TEXT_DROPSHADOW(0, 0, 0, 0, 0);
-		UI::SET_TEXT_EDGE(0, 0, 0, 0, 0);
-		UI::_SET_TEXT_ENTRY("STRING");
-		UI::_ADD_TEXT_COMPONENT_STRING((LPSTR)caption.c_str());
-		UI::_DRAW_TEXT(textLeftScaled, (((lineTopScaled + 0.00278f) + lineHeightScaled) - 0.005f));
+		LoggerLight("ReteaveBrain, id == " + id);
 
-		// text lower part
-		UI::SET_TEXT_FONT(font);
-		UI::SET_TEXT_SCALE(0.0, text_scale);
-		UI::SET_TEXT_COLOUR(text_col[0], text_col[1], text_col[2], text_col[3]);
-		UI::SET_TEXT_CENTRE(0);
-		UI::SET_TEXT_DROPSHADOW(0, 0, 0, 0, 0);
-		UI::SET_TEXT_EDGE(0, 0, 0, 0, 0);
-		UI::_SET_TEXT_GXT_ENTRY("STRING");
-		UI::_ADD_TEXT_COMPONENT_STRING((LPSTR)caption.c_str());
-		return UI::_0x9040DFB09BE75706(textLeftScaled, (((lineTopScaled + 0.00278f) + lineHeightScaled) - 0.005f));
+		int Id = -1;
+		for (int i = 0; i < (int)PedList.size(); i++)
+		{
+			if (PedList[i].MyIdentity == id)
+			{
+				Id = i;
+				break;
+			}
+		}
+		return Id;
 	}
-	void AddSprite(string spriteLocation, string spriteName, float posX, float posY, float sizeX, float sizeY, float heading)
+	int RetreaveCont(const std::string& id)
+	{
+		LoggerLight("RetreaveCont, id == " + id);
+
+		int Id = -1;
+		for (int i = 0; i < (int)PhoneContacts.size(); i++)
+		{
+			if (PhoneContacts[i].YourFriend.MyIdentity == id)
+			{
+				Id = i;
+				break;
+			}
+		}
+		return Id;
+	}
+	int ReteaveBrain(const Ped& ped)
+	{
+		LoggerLight("ReteaveBrain, ped");
+
+		int Id = -1;
+		for (int i = 0; i < (int)PedList.size(); i++)
+		{
+			if (PedList[i].ThisPed == ped)
+			{
+				Id = i;
+				break;
+			}
+		}
+		return Id;
+	}
+
+	void AddSprite(const std::string& spriteLocation, const std::string& spriteName, float posX, float posY, float sizeX, float sizeY, float heading)
 	{
 		if (!GRAPHICS::HAS_STREAMED_TEXTURE_DICT_LOADED((LPSTR)spriteLocation.c_str()))
 			GRAPHICS::REQUEST_STREAMED_TEXTURE_DICT((LPSTR)spriteLocation.c_str(), true);
@@ -1340,21 +1164,7 @@ namespace PZSys
 		float screenY = sizeY / 1080 + height * 0.5f;
 		GRAPHICS::DRAW_SPRITE((LPSTR)spriteLocation.c_str(), (LPSTR)spriteName.c_str(), screenX, screenY, width, height, heading, red, green, blue, alpha);
 	}
-	void get_button_state(bool* a, bool* b, bool* up, bool* down, bool* l, bool* r, bool* shutDown)
-	{
-		if (a) *a = IsKeyDown(VK_RETURN);
-		if (b) *b = IsKeyDown(VK_DELETE) || IsKeyDown(VK_BACK);
-		if (up) *up = IsKeyDown(VK_UP);
-		if (down) *down = IsKeyDown(VK_DOWN);
-		if (l) *l = IsKeyDown(VK_LEFT);
-		if (r) *r = IsKeyDown(VK_RIGHT);
-		if (shutDown) *shutDown = IsKeyDown(VK_ESCAPE);
-	}
-	void draw_rect(float A_0, float A_1, float A_2, float A_3, int A_4, int A_5, int A_6, int A_7)
-	{
-		GRAPHICS::DRAW_RECT((A_0 + (A_2 * 0.5f)), (A_1 + (A_3 * 0.5f)), A_2, A_3, A_4, A_5, A_6, A_7);
-	}
-	void DrawSessionList(std::string caption, std::string level, float lineWidth, float lineHeight, float lineTop, float lineLeft, float textLeft, float textLeft2, bool active, bool title, int position)
+	void DrawSessionList(const std::string& caption, const std::string& level, float lineWidth, float lineHeight, float lineTop, float lineLeft, float textLeft, float textLeft2, bool active, bool title, int position)
 	{
 		// default values
 		int text_col[4] = { 255, 255, 255, 255 },
@@ -1388,10 +1198,10 @@ namespace PZSys
 		// this is how it's done in original scripts
 
 		// text upper part
-		int num25 = AddScreenText(font, caption, textLeftScaled, lineTopScaled, lineHeightScaled, text_scale, text_col);
-		int num26 = AddScreenText(font, level, textLeftScaled2, lineTopScaled, lineHeightScaled, text_scale, text_col);
+		int num25 = GVM::AddScreenTextCenter(font, caption, textLeftScaled, lineTopScaled, lineHeightScaled, text_scale, GVM::RGBA(text_col[0], text_col[1], text_col[2], text_col[3]));
+		int num26 = GVM::AddScreenTextCenter(font, level, textLeftScaled2, lineTopScaled, lineHeightScaled, text_scale, GVM::RGBA(text_col[0], text_col[1], text_col[2], text_col[3]));
 		// rect
-		draw_rect(lineLeftScaled, lineTopScaled + (0.00278f), lineWidthScaled, ((((float)(num25)*UI::_0xDB88A37483346780(text_scale, 0)) + (lineHeightScaled * 2.0f)) + 0.005f), rect_col[0], rect_col[1], rect_col[2], rect_col[3]);
+		GVM::Draw_rect(lineLeftScaled, lineTopScaled + (0.00278f), lineWidthScaled, ((((float)(num25)*UI::_0xDB88A37483346780(text_scale, 0)) + (lineHeightScaled * 2.0f)) + 0.005f), rect_col[0], rect_col[1], rect_col[2], rect_col[3]);
 
 		if (active)
 		{
@@ -1407,427 +1217,8 @@ namespace PZSys
 			AddSprite("mpleaderboard", "leaderboard_globe_icon", PosX, PosY + (float)position * iTimes1, sizeX, sizeY + (float)position * iTimes2, 0.0);
 		}
 	}
-	void draw_menu_line(std::string caption, float lineWidth, float lineHeight, float lineTop, float lineLeft, float textLeft, bool active, bool title, bool rescaleText)
-	{
-		// default values
-		int text_col[4] = { 247, 245, 158, 255 },
-			rect_col[4] = { 70, 95, 95, 255 };
-		float text_scale = 0.35;
-		int font = 0;
 
-		// correcting values for active line
-		if (active)
-		{
-			text_col[0] = 198;
-			text_col[1] = 255;
-			text_col[2] = 226;
-
-			rect_col[0] = 100;
-			rect_col[1] = 44;
-			rect_col[2] = 101;
-
-			if (rescaleText) text_scale = 0.40;
-		}
-
-		if (title)
-		{
-			rect_col[0] = 112;
-			rect_col[1] = 44;
-			rect_col[2] = 20;
-
-			if (rescaleText) text_scale = 0.50;
-			font = 1;
-		}
-
-		int screen_w, screen_h;
-		GRAPHICS::GET_SCREEN_RESOLUTION(&screen_w, &screen_h);
-
-		textLeft += lineLeft;
-
-		float lineWidthScaled = lineWidth / (float)screen_w; // line width
-		float lineTopScaled = lineTop / (float)screen_h; // line top offset
-		float textLeftScaled = textLeft / (float)screen_w; // text left offset
-		float lineHeightScaled = lineHeight / (float)screen_h; // line height
-
-		float lineLeftScaled = lineLeft / (float)screen_w;
-
-		// this is how it's done in original scripts
-		int num25 = AddScreenText(font, caption, textLeftScaled, lineTopScaled, lineHeightScaled, text_scale, text_col);
-
-		// rect
-		draw_rect(lineLeftScaled, lineTopScaled + (0.00278f), lineWidthScaled, ((((float)(num25)*UI::_0xDB88A37483346780(text_scale, 0)) + (lineHeightScaled * 2.0f)) + 0.005f),
-			rect_col[0], rect_col[1], rect_col[2], rect_col[3]);
-	}
-	void CloseBaseHelpBar(int CloseMe)
-	{
-		LoggerLight("CloseBaseHelpBar");
-		int SF = CloseMe;
-		GRAPHICS::SET_SCALEFORM_MOVIE_AS_NO_LONGER_NEEDED(&SF);
-	}
-	int BottomRight(vector<int> iButtons, vector<string> sInstuctions)
-	{
-		LoggerLight("BottomRight");
-
-		string CharCon = "instructional_buttons";
-		int iScale = GRAPHICS::REQUEST_SCALEFORM_MOVIE((LPSTR)CharCon.c_str());
-
-		while (!GRAPHICS::HAS_SCALEFORM_MOVIE_LOADED(iScale))
-			WAIT(1);
-
-		CharCon = "CLEAR_ALL";
-		GRAPHICS::CALL_SCALEFORM_MOVIE_METHOD(iScale, (LPSTR)CharCon.c_str());
-		CharCon = "TOGGLE_MOUSE_BUTTONS";
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(iScale, (LPSTR)CharCon.c_str());
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_BOOL(0);
-		GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-
-		CharCon = "CREATE_CONTAINER";
-		GRAPHICS::CALL_SCALEFORM_MOVIE_METHOD(iScale, (LPSTR)CharCon.c_str());//Was---_CALL_SCALEFORM_MOVIE_FUNCTION_VOID
-
-		int iAddOns = 0;
-
-		for (int i = 0; i < (int)iButtons.size(); i++)
-		{
-			CharCon = "SET_DATA_SLOT";
-			GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(iScale, (LPSTR)CharCon.c_str());
-			GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(iAddOns);
-			GRAPHICS::_0xE83A3E3557A56640(CONTROLS::_GET_CONTROL_ACTION_NAME(2, iButtons[i], 1));
-			GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_STRING((LPSTR)sInstuctions[i].c_str());
-			GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-			iAddOns++;
-		}
-		CharCon = "DRAW_INSTRUCTIONAL_BUTTONS";
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(iScale, (LPSTR)CharCon.c_str());
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(-1);
-		GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-
-		return iScale;
-	}
-	int MyMenuSys(string caption, vector<string> MyMenu)
-	{
-
-		const float lineWidth = 450.0;
-		int iPick = 0;
-		int iLow = 0;
-		int iHigh = 7;
-		bool Scroling = false;
-
-		if ((int)MyMenu.size() < 7)
-			iHigh = (int)MyMenu.size();
-		else
-			Scroling = true;
-
-		DWORD waitTime = 150;
-
-		vector<string> sInstBut = { PZLang[84], PZLang[85] };
-		vector<int> iInstBut = { 21, 45 };
-
-		int iBc = BottomRight(iInstBut, sInstBut);
-
-		while (true)
-		{
-			if (PlayDead)
-			{
-				iPick = -1;
-				break;
-			}
-			// timed menu draw, used for pause after active line switch
-
-			DWORD maxTickCount = GetTickCount() + waitTime;
-			do
-			{
-				// draw menu
-				draw_menu_line(caption, lineWidth, 15.0, 18.0, 0.0, 5.0, false, true);
-				for (int i = iLow; i < iHigh; i++)
-					if (i != iPick)
-						draw_menu_line(MyMenu[i], lineWidth, 9.0, 60.0 + (i - iLow) * 36.0, 0.0, 9.0, false, false);
-				draw_menu_line(MyMenu[iPick], lineWidth + 1.0, 11.0, 56.0 + (iPick - iLow) * 36.0, 0.0, 7.0, true, false);
-
-				GRAPHICS::DRAW_SCALEFORM_MOVIE_FULLSCREEN(iBc, 255, 255, 255, 255, 0);
-				WAIT(0);
-			} while (GetTickCount() < maxTickCount);
-			waitTime = 0;
-
-			// process buttons
-			bool bUp, bDown, bEnter, bBack, bShutDown;
-			get_button_state(&bEnter, &bBack, &bUp, &bDown, NULL, NULL, &bShutDown);
-			if (bShutDown || ButtonDown(199, false))
-			{
-				iMenuSys = 0;
-				break;
-			}
-			else if (ButtonDown(21, true) || bEnter)
-			{
-				menu_beep();
-				break;
-			}
-			else
-			{
-				if (ButtonDown(45, true) || bBack)
-				{
-					menu_beep();
-					iPick = -1;
-					break;
-				}
-				else
-				{
-					if (bUp || ButtonDown(27, true))
-					{
-						menu_beep();
-						if (Scroling)
-						{
-							if (iLow > 0)
-							{
-								iLow--;
-								iHigh--;
-							}
-
-							if (iPick == 0)
-							{
-								iPick = (int)MyMenu.size();
-								if (iPick > 6)
-								{
-									iHigh = iPick;
-									iLow = iHigh - 7;
-								}
-							}
-
-							iPick--;
-						}
-						else
-						{
-							if (iPick == 0)
-								iPick = (int)MyMenu.size();
-							iPick--;
-						}
-
-						waitTime = 150;
-					}
-					else if (bDown || ButtonDown(19, true))
-					{
-						menu_beep();
-						iPick++;
-						if (Scroling)
-						{
-							if (iPick == (int)MyMenu.size())
-							{
-								iPick = 0;
-								iHigh = 7;
-								iLow = 0;
-							}
-							else if (iPick == iHigh && iHigh < (int)MyMenu.size())
-							{
-								iLow++;
-								iHigh++;
-							}
-						}
-						else
-						{
-							if (iPick == (int)MyMenu.size())
-								iPick = 0;
-						}
-						waitTime = 150;
-					}
-				}
-			}
-		}
-
-		CloseBaseHelpBar(iBc);
-
-		return iPick;
-	}
-	vector<int> MyMenuSysPlus(string caption, vector<PZclass::MenuNumbers> MinMax)
-	{
-
-		const float lineWidth = 250.0;
-		int iPick = 0;
-		int iLow = 0;
-		int iHigh = 7;
-		bool Scroling = false;
-		vector<int> MyPick = {};
-
-		for (int i = 0; i < (int)MinMax.size(); i++)
-			MyPick.push_back(MinMax[i].Current);
-
-		if ((int)MinMax.size() < 7)
-			iHigh = (int)MinMax.size();
-		else
-			Scroling = true;
-
-		vector<string> sInstBut = { PZLang[84], PZLang[85] };
-		vector<int> iInstBut = { 21, 45 };
-
-		int iBc = BottomRight(iInstBut, sInstBut);
-		int iHeld = 150;
-
-		DWORD waitTime = 150;
-		while (true)
-		{
-			if (PlayDead)
-			{
-				iPick = -1;
-				break;
-			}
-			// timed menu draw, used for pause after active line switch
-			DWORD maxTickCount = GetTickCount() + waitTime;
-			do
-			{
-				// draw menu
-				draw_menu_line(caption, lineWidth, 15.0, 18.0, 0.0, 5.0, false, true);
-				for (int i = iLow; i < iHigh; i++)
-					if (i != iPick)
-						draw_menu_line(MinMax[i].Title + std::to_string(MyPick[i]), lineWidth, 9.0, 60.0 + (i - iLow) * 36.0, 0.0, 9.0, false, false);
-				draw_menu_line(MinMax[iPick].Title + std::to_string(MyPick[iPick]), lineWidth + 1.0, 11.0, 56.0 + (iPick - iLow) * 36.0, 0.0, 7.0, true, false);
-
-				GRAPHICS::DRAW_SCALEFORM_MOVIE_FULLSCREEN(iBc, 255, 255, 255, 255, 0);
-				WAIT(0);
-			} while (GetTickCount() < maxTickCount);
-			waitTime = 0;
-
-			// process buttons
-			bool bUp, bDown, bLeft, bRight, bEnter, bBack, bShutDown;
-			get_button_state(&bEnter, &bBack, &bUp, &bDown, &bLeft, &bRight, &bShutDown);
-			if (bShutDown || ButtonDown(199, false))
-			{
-				iMenuSys = 0;
-				break;
-			}
-			else if (ButtonDown(21, true) || bEnter)
-			{
-				menu_beep();
-				break;
-			}
-			else
-			{
-				if (ButtonDown(45, true)|| bBack)
-				{
-					menu_beep();
-					for (int i = 0; i < (int)MinMax.size(); i++)
-						MyPick[i] = MinMax[i].Current;
-
-					break;
-				}
-				else
-				{
-					if (bUp || ButtonDown(27, true))
-					{
-						if (Scroling)
-						{
-							if (iLow > 0)
-							{
-								iLow--;
-								iHigh--;
-							}
-
-							if (iPick == 0)
-							{
-								iPick = (int)MinMax.size();
-								if (iPick > 6)
-								{
-									iHigh = iPick;
-									iLow = iHigh - 7;
-								}
-							}
-
-							iPick--;
-						}
-						else
-						{
-							if (iPick == 0)
-								iPick = (int)MinMax.size();
-							iPick--;
-						}
-
-						waitTime = 150;
-					}
-					else if (bDown || ButtonDown(19, true))
-					{
-						iPick++;
-						if (Scroling)
-						{
-							if (iPick == (int)MinMax.size())
-							{
-								iPick = 0;
-								iHigh = 7;
-								iLow = 0;
-							}
-							else if (iPick == iHigh && iHigh < (int)MinMax.size())
-							{
-								iLow++;
-								iHigh++;
-							}
-						}
-						else
-						{
-							if (iPick == (int)MinMax.size())
-								iPick = 0;
-						}
-
-						waitTime = 150;
-					}
-					else if (bLeft || ButtonDown(47, true))
-					{
-						if (MyPick[iPick] > MinMax[iPick].Min)
-							MyPick[iPick] -= 1;
-
-						if (iHeld > 0)
-							iHeld--;
-
-						waitTime = iHeld;
-					}
-					else if (bRight || ButtonDown(46, true))
-					{
-						if (MyPick[iPick] < MinMax[iPick].Max)
-							MyPick[iPick] += 1;
-
-						if (iHeld > 0)
-							iHeld--;
-
-						waitTime = iHeld;
-					}
-					else
-						iHeld = 150;
-				}
-			}
-		}
-
-		CloseBaseHelpBar(iBc);
-
-		return MyPick;
-	}
-
-	int InGameTime()
-	{
-		return (int)GAMEPLAY::GET_GAME_TIMER();
-	}
-	bool IsIsSafe(int Key)
-	{
-		bool isSafe = false;
-		if (!(bool)PED::IS_PED_RUNNING_MOBILE_PHONE_TASK(PLAYER::PLAYER_PED_ID()))
-		{
-			while (ButtonDown(Key, false))
-			{
-				WAIT(1000);
-				if (ButtonDown(Key, false))
-					isSafe = true;
-				break;
-			}
-		}
-		return isSafe;
-	}
-	bool WHileKeyDown(int iKey)
-	{
-		bool k = false;
-		while (IsKeyDown(KeyFind[iKey]))
-		{
-			if (!k)
-				k = true;
-			WAIT(1);
-		}
-		return k;
-	}
-
-	void showText(float x, float y, float scale, string text, int font, PZclass::RGBA rgba, bool outline)
+	void showText(float x, float y, float scale, const std::string& text, int font, RGBA rgba, bool outline)
 	{
 		UI::SET_TEXT_FONT(font);
 		UI::SET_TEXT_SCALE(scale, scale);
@@ -1847,7 +1238,7 @@ namespace PZSys
 		float totalMult = baseSize / (distance * (CAM::GET_GAMEPLAY_CAM_FOV() / 60.0f));
 
 		float height = 0.0125f * totalMult;
-		PZclass::RGBA fontColor = PZclass::RGBA(255, 255, 255, 255);
+		RGBA fontColor = RGBA(255, 255, 255, 255);
 		GRAPHICS::SET_DRAW_ORIGIN(location.x, location.y, location.z, 0);
 		int i = 0;
 
@@ -1859,313 +1250,162 @@ namespace PZSys
 
 		GRAPHICS::CLEAR_DRAW_ORIGIN();
 	}
-	void BigMessage(string message, string message2, int colour)
+
+	std::string GetVehName(std::string vic)
 	{
-		int iScale = GRAPHICS::REQUEST_SCALEFORM_MOVIE("MIDSIZED_MESSAGE");
+		char* VehName = VEHICLE::GET_DISPLAY_NAME_FROM_VEHICLE_MODEL(MyHashKey(vic));
 
-		WAIT(1500);
-		while (!GRAPHICS::HAS_SCALEFORM_MOVIE_LOADED(iScale))
-			WAIT(1);
+		if (UI::DOES_TEXT_LABEL_EXIST(VehName))
+			VehName = UI::_GET_LABEL_TEXT(VehName);
+		else
+			VehName = "";
 
-		GRAPHICS::_START_SCREEN_EFFECT("SuccessNeutral", 8500, false);
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(iScale, "SHOW_SHARD_MIDSIZED_MESSAGE");
-		GRAPHICS::_BEGIN_TEXT_COMPONENT("STRING");
-		UI::_ADD_TEXT_COMPONENT_STRING((LPSTR)message.c_str());
-		GRAPHICS::_END_TEXT_COMPONENT();
-		GRAPHICS::_BEGIN_TEXT_COMPONENT("STRING");
-		UI::_ADD_TEXT_COMPONENT_STRING((LPSTR)message2.c_str());
-		GRAPHICS::_END_TEXT_COMPONENT();
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(colour);// color 0,1=white 2=black 3=grey 6,7,8=red 9,10,11=blue 12,13,14=yellow 15,16,17=orange 18,19,20=green 21,22,23=purple 
-		GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
+		std::string VehStr(VehName);
 
-		int iWait4 = InGameTime() + 8000;
-
-		while (iWait4 > InGameTime())
-		{
-			GRAPHICS::DRAW_SCALEFORM_MOVIE_FULLSCREEN(iScale, 255, 255, 255, 255, 2);
-			WAIT(1);
-		}
-
-		GRAPHICS::SET_SCALEFORM_MOVIE_AS_NO_LONGER_NEEDED(&iScale);
+		return VehStr;
 	}
-	void TopLeft(string sText)
+
+	std::vector<std::string> LastMessage = {};
+
+	void CleanOutOldCalls()
 	{
-		UI::_SET_TEXT_COMPONENT_FORMAT("STRING");
-		UI::_ADD_TEXT_COMPONENT_STRING((LPSTR)sText.c_str());
-		UI::_DISPLAY_HELP_TEXT_FROM_STRING_LABEL(0, 0, 1, 5000);
-	}
-	int BottomLeft(string sText)
-	{
-		if (!PZData::MySettings.NoNotify)
+		std::vector<std::string> Files = ReadDirectory(DirectMain);
+
+		for (int i = 0; i < Files.size(); i++)
 		{
-			UI::_SET_NOTIFICATION_TEXT_ENTRY("STRING");
-			UI::_ADD_TEXT_COMPONENT_STRING((LPSTR)sText.c_str());
-			return UI::_DRAW_NOTIFICATION(1, 1);
+			if (StringContains("PzContacts", Files[i]))
+				FileRemoval(Files[i]);
 		}
 	}
-	int BottomLeftIcon(string sText1, string sText2, string subject, string badge, string clanTag)
+	void AddContacttoList(const PhoneContact& cont)
 	{
-		//badge = "CHAR_SOCIAL_CLUB";
-		// clanTag = "__EXAMPLE"
-
-		UI::_SET_NOTIFICATION_TEXT_ENTRY("STRING");
-		UI::_ADD_TEXT_COMPONENT_STRING((LPSTR)sText1.c_str());
-		///char* picName1, char* picName2, BOOL flash, int iconType1, char* sender, char* subject, float duration, char* clanTag, int iconType2, int p9
-		UI::_SET_NOTIFICATION_MESSAGE_CLAN_TAG_2((LPSTR)badge.c_str(), (LPSTR)badge.c_str(), 0, 7, (LPSTR)sText2.c_str(), (LPSTR)subject.c_str(), 3.0, (LPSTR)clanTag.c_str(), 7, 0);
-		return UI::_DRAW_NOTIFICATION(1, 1);
+		std::vector<std::string> AddSetts = {
+			"[Phone]",
+			"ContactName=" + cont.Name,
+			"ContactAddress=" + cont.ConReturnAdd,
+			"Icon=CHAR_BLANK_ENTRY",
+			"[Phone/End]"
+		};
+		WriteFile(cont.ConMobileAdd, AddSetts);
 	}
-
-	void ClearYourFriend(bool Retry)
+	void AddPhoneFriends()
 	{
-		if (YouFriend.MyBrain != NULL)
-		{
-			YouFriend.MyBrain->WanBeFriends = false;
+		std::vector<std::string> PhoneFr = ReadDirectory(DirectMobileNet);
 
-			if (Retry)
-				YouFriend.MyBrain->ApprochPlayer = true;
+		for (int i = 0; i < PhoneFr.size(); i++)
+		{
+			if (StringContains("PzContacts", PhoneFr[i]))
+				FileRemoval(PhoneFr[i]);
 		}
 
-		YouFriend = PZclass::JoinMe("Empty");
-	}
-	vector<string> LastMessage = {};
-	void RightSide(std::string caption, int iPos)
-	{
-		int text_col[4] = { 255, 255, 255, 255 },
-			rect_col[4] = { 0, 0, 0, 120 };
-		float text_scale = 0.5;
-		int font = 4;
-
-		float lineTop = (float)251.0 + (float)iPos * 22.5;
-		float lineHeight = 49.5;
-		float lineLeft = 1000.0;
-		float textLeft = -10.0;
-
-		// correcting values for active line
-		int screen_w, screen_h;
-		GRAPHICS::GET_SCREEN_RESOLUTION(&screen_w, &screen_h);
-
-		textLeft += lineLeft;
-
-		float lineTopScaled = lineTop / (float)screen_h; // line top offset
-		float textLeftScaled = textLeft / (float)screen_w; // text left offset
-		float lineHeightScaled = lineHeight / (float)screen_h; // line height
-
-		float lineLeftScaled = lineLeft / (float)screen_w;
-
-		// this is how it's done in original scripts
-
-		// text upper part
-		int num25 = AddScreenText(font, caption, textLeftScaled, lineTopScaled, lineHeightScaled, text_scale, text_col);
-	}
-
-	int FindKeyBinds(bool Control)
-	{
-		WAIT(4000);
-		int iReturn = -1;
-		int TestCase = 0;
-
-		while (true)
+		for (int i = 0; i < (int)PhoneContacts.size(); i++)
 		{
-			if (PlayDead)
-				break;
-
-			TopLeft(PZLang[89]);
-
-			if (Control)
-			{
-				if (TestCase < (int)ControlSym.size())
-				{
-					if (ButtonDown(TestCase, false))
-					{
-						BottomLeft(PZLang[90]);
-						iReturn = TestCase;
-						break;
-					}
-					TestCase++;
-				}
-				else
-					TestCase = 0;
-			}
-			else
-			{
-				if (TestCase < (int)KeyFind.size())
-				{
-					if (IsKeyDown(KeyFind[TestCase]))
-					{
-						BottomLeft(PZLang[90]);
-						iReturn = TestCase;
-						break;
-					}
-					TestCase++;
-				}
-				else
-					TestCase = 0;
-			}
-			WAIT(1);
-		}
-		return iReturn;
+			if (PhoneContacts[i].YourFriend.IsMobileCont && !PhoneContacts[i].InSession)
+				AddContacttoList(PhoneContacts[i]);
+		}		
 	}
+	void CleanNameList()
+	{
+		PlayerNames.clear();
 
-	vector<PZclass::PhoneContact> LoadContacts()
+		for (int i = 0; i < PedList.size(); i++)
+			PlayerNames.push_back(PedList[i].MyName);
+
+		for (int i = 0; i < AFKList.size(); i++)
+			PlayerNames.push_back(AFKList[i].MyName);
+	}
+	void LoadContacts()
 	{
 		LoggerLight("LoadContacts");
-		vector<PZclass::PhoneContact> PzCont = {};
 
-		string OutputFolder = GetDir() + "/PlayerZero/Contacts";
-		if (CreateDirectoryA((LPSTR)OutputFolder.c_str(), NULL) || ERROR_ALREADY_EXISTS == GetLastError())
-		{
+		CleanNameList();
 
-		}
-		vector<string> Files = {};
-		for (const auto& entry : std::filesystem::directory_iterator(OutputFolder))
-			Files.push_back(entry.path().string());
+		std::vector<std::string> Files = ReadDirectory(DirectContacts);
 
 		for (int i = 0; i < Files.size(); i++)
 		{
 			LoggerLight("LoadContacts == " + Files[i]);
 
 			int intList = 0;
-
-			int BlipC = 38, Level = 101; string Name = "Bob", Id = "Bob101"; int iNat = 1, Gun = -1, PreVeh = 0;
-
-			string model = "mp_m_freemode_01";
-
+			int Level = 101; std::string Name = "Bob", Id = "Bob101"; int iNat = 1, Gun = -1, Rad = -2, PreVeh = 0;
+			std::string model = "mp_m_freemode_01", faveVehicle = "";
 			int shapeFirstID = 5, shapeSecondID = 5; float shapeMix = 0.0, skinMix = 0.92, thirdMix = 0.0;
+			bool male = true, mobCon = false; int hairColour = 7, hairStreaks = 7, eyeColour = 0;
+			int comp = 3, text = 4; std::string HairTag = "H_FMM_3_4", HairName = ""; int overLib = -1, over = 1;
+			std::string Cloths = ""; std::vector<int> ClothA = {}, ClothB = {}, ExtraA = {}, ExtraB = {};
 
-			bool male = true; int hairColour = 7, hairStreaks = 7, eyeColour = 0;
+			std::vector<FreeOverLay> myOverlay = {};
+			std::vector<Tattoo> myTattoo = {};
 
-			int comp = 3, text = 4; string HairTag = "H_FMM_3_4", HairName = ""; int overLib = -1, over = 1;
-
-			string Cloths = ""; vector<int> ClothA = {}, ClothB = {}, ExtraA = {}, ExtraB = {};
-
-			vector<PZclass::FreeOverLay> myOverlay = {};
-			vector<PZclass::Tattoo> myTattoo = {};
-
-			vector<string> MyColect = ReadFile(Files[i]);
+			std::vector<std::string> MyColect = ReadFile(Files[i]);
 
 			for (int i = 0; i < MyColect.size(); i++)
 			{
-				string line = MyColect[i];
+				std::string line = MyColect[i];
 				if (StringContains("National", line))
-				{
 					iNat = StingNumbersInt(line);
-				}
-				else if (StringContains("BlipColour", line))
-				{
-					BlipC = StingNumbersInt(line);
-				}
 				else if (StringContains("Level", line))
-				{
 					Level = StingNumbersInt(line);
-				}
+				else if (StringContains("IsMobileCont", line))
+					mobCon = StringBool(line);
 				else if (StringContains("GunSelect", line))
-				{
 					Gun = StingNumbersInt(line);
-				}
+				else if (StringContains("FaveRadio", line))
+					Rad = StingNumbersInt(line);
 				else if (StringContains("PrefredVehicle", line))
-				{
 					PreVeh = StingNumbersInt(line);
-				}
+				else if (StringContains("FaveVehicle", line))
+					faveVehicle = AfterEqual(line);
 				else if (StringContains("PlayersName", line))
-				{
 					Name = AfterEqual(line);
-				}
 				else if (StringContains("PlayersId", line))
-				{
 					Id = AfterEqual(line);
-				}
 				else if (StringContains("Model", line))
-				{
 					model = AfterEqual(line);
-				}
 				else if (StringContains("ShapeFirstID", line))
-				{
 					shapeFirstID = StingNumbersInt(line);
-				}
 				else if (StringContains("ShapeSecondID", line))
-				{
 					shapeSecondID = StingNumbersInt(line);
-				}
 				else if (StringContains("ShapeMix", line))
-				{
 					shapeMix = StingNumbersFloat(line);
-				}
 				else if (StringContains("SkinMix", line))
-				{
 					skinMix = StingNumbersFloat(line);
-				}
 				else if (StringContains("ThirdMix", line))
-				{
 					thirdMix = StingNumbersFloat(line);
-				}
 				else if (StringContains("Male", line))
-				{
 					male = StringBool(line);
-				}
 				else if (StringContains("HairColour", line))
-				{
 					hairColour = StingNumbersInt(line);
-				}
 				else if (StringContains("HairStreaks", line))
-				{
 					hairStreaks = StingNumbersInt(line);
-				}
 				else if (StringContains("EyeColour", line))
-				{
 					eyeColour = StingNumbersInt(line);
-				}
 				else if (StringContains("Comp", line))
-				{
 					comp = StingNumbersInt(line);
-				}
 				else if (StringContains("Text", line))
-				{
 					text = StingNumbersInt(line);
-				}
 				else if (StringContains("HairTag", line))
-				{
 					HairTag = AfterEqual(line);
-				}
 				else if (StringContains("HairName", line))
-				{
 					HairName = AfterEqual(line);
-				}
 				else if (StringContains("OverLib", line))
-				{
 					overLib = StingNumbersInt(line);
-				}
 				else if (StringContains("Over", line))
-				{
 					over = StingNumbersInt(line);
-				}
 				else if (StringContains("Title", line))
-				{
 					Cloths = StingNumbersInt(line);
-				}
 				else if (StringContains("[ClothA]", line))
-				{
 					intList = 1;
-				}
 				else if (StringContains("[ClothB]", line))
-				{
 					intList = 2;
-				}
 				else if (StringContains("[ExtraA]", line))
-				{
 					intList = 3;
-				}
 				else if (StringContains("[ExtraB]", line))
-				{
 					intList = 4;
-				}
 				else if (StringContains("[FreeOverLay]", line))
-				{
 					intList = 5;
-				}
 				else if (StringContains("[Tattoo]", line))
-				{
 					intList = 6;
-				}
 				else if (intList == 1)
 				{
 					if (StringContains("ClothA", line))
@@ -2189,12 +1429,12 @@ namespace PZSys
 				else if (intList == 5)
 				{
 					if (StringContains("Overlay", line))
-						myOverlay.push_back(PZclass::FreeOverLay(StingNumbersInt(line), StingNumbersInt(MyColect[i + 1]), StingNumbersFloat(MyColect[i + 2])));
+						myOverlay.push_back(FreeOverLay(StingNumbersInt(line), StingNumbersInt(MyColect[i + 1]), StingNumbersFloat(MyColect[i + 2])));
 				}
 				else if (intList == 6)
 				{
 					if (StringContains("BaseName", line))
-						myTattoo.push_back(PZclass::Tattoo(AfterEqual(line), AfterEqual(MyColect[i + 1]), AfterEqual(MyColect[i + 2])));
+						myTattoo.push_back(Tattoo(AfterEqual(line), AfterEqual(MyColect[i + 1]), AfterEqual(MyColect[i + 2])));
 				}
 			}
 
@@ -2206,45 +1446,47 @@ namespace PZSys
 				PreVeh = 0;
 				bReBuild = true;
 			}
+			
+			if (Rad == -2)
+			{
+				Rad = LessRandomInt("RadioSet", -1, (int)RadioGaGa.size() - 1);
+				if (LessRandomInt("RadioFlik", 0, 20) < 3)
+					Rad = 99;
+				bReBuild = true;
+			}
+			
+			FaceBank myFaces = FaceBank(shapeFirstID, shapeSecondID, shapeMix, skinMix, thirdMix);
+			ClothX cothing = ClothX(Cloths, ClothA, ClothB, ExtraA, ExtraB);
+			HairSets myHair = HairSets(comp, text, HairTag, HairName, overLib, over);
+			std::string ConMobAdd = DirectMobileNet + "/PzContacts" + Name + ".ini";
+			std::string ConRetAdd = DirectMain + "/PzContacts" + Name + ".ini";
+			PhoneContact ThisCon = PhoneContact(Name, ConMobAdd, ConRetAdd, PlayerBrain(Name, Id, ClothBank(Name, model, cothing, myFaces, male, myHair, hairColour, hairStreaks, eyeColour, myOverlay, myTattoo), 0, Level, true, mobCon, iNat, Gun, PreVeh, faveVehicle, Rad));
 
-			PZclass::FaceBank myFaces = PZclass::FaceBank(shapeFirstID, shapeSecondID, shapeMix, skinMix, thirdMix);
-			PZclass::ClothX cothing = PZclass::ClothX(Cloths, ClothA, ClothB, ExtraA, ExtraB);
-			PZclass::HairSets myHair = PZclass::HairSets(comp, text, HairTag, HairName, overLib, over);
+			if (ReteaveBrain(Id) != -1)
+				ThisCon.InSession = true;
 
-			PZclass::PhoneContact ThisCon = PZclass::PhoneContact(Name, PZclass::PlayerBrain(Name, Id, PZclass::ClothBank(Name, model, cothing, myFaces, male, myHair, hairColour, hairStreaks, eyeColour, myOverlay, myTattoo), 0, Level, true, iNat, Gun, PreVeh));
-
-			PzCont.push_back(ThisCon);
+			PhoneContacts.push_back(ThisCon);
 
 			PlayerNames.push_back(Name);
 
 			if (bReBuild)
 				SaveContacts(ThisCon);
 		}
-
-		return PzCont;
+		AddPhoneFriends();
 	}
-	void SaveContacts(PZclass::PhoneContact contact)
+	void SaveContacts(const PhoneContact& contact)
 	{
 		LoggerLight("SaveContacts == " + contact.YourFriend.MyName);
 
-		string OutputFolder = GetDir() + "/PlayerZero/Contacts";
-		if (CreateDirectoryA((LPSTR)OutputFolder.c_str(), NULL) || ERROR_ALREADY_EXISTS == GetLastError())
-		{
-
-		}
-
-		string sb = "false";
-
-		if (contact.YourFriend.PFMySetting.Male)
-			sb = "true";
-
-		vector<string> MyCon = {
+		std::vector<std::string> MyCon = {
 			"[PlayerBrain]",
 			"National=" + std::to_string(contact.YourFriend.Nationality),
-			"BlipColour=" + std::to_string(contact.YourFriend.BlipColour),
 			"Level=" + std::to_string(contact.YourFriend.Level),
+			"IsMobileCont=" + BoolToString(contact.YourFriend.IsMobileCont),
 			"GunSelect=" + std::to_string(contact.YourFriend.GunSelect),
+			"FaveRadio=" + std::to_string(contact.YourFriend.FaveRadio),
 			"PrefredVehicle=" + std::to_string(contact.YourFriend.PrefredVehicle),
+			"FaveVehicle=" + contact.YourFriend.FaveVehicle,
 			"PlayersName=" + contact.YourFriend.MyName,
 			"PlayersId=" + contact.YourFriend.MyIdentity,
 			"[ClothBank]",
@@ -2255,7 +1497,7 @@ namespace PZSys
 			"ShapeMix=" + std::to_string(contact.YourFriend.PFMySetting.MyFaces.ShapeMix),
 			"SkinMix=" + std::to_string(contact.YourFriend.PFMySetting.MyFaces.SkinMix),
 			"ThirdMix=" + std::to_string(contact.YourFriend.PFMySetting.MyFaces.ThirdMix),
-			"Male=" + sb,
+			"Male=" + BoolToString(contact.YourFriend.PFMySetting.Male),
 			"HairColour=" + std::to_string(contact.YourFriend.PFMySetting.HairColour),
 			"HairStreaks=" + std::to_string(contact.YourFriend.PFMySetting.HairStreaks),
 			"EyeColour=" + std::to_string(contact.YourFriend.PFMySetting.EyeColour),
@@ -2311,29 +1553,14 @@ namespace PZSys
 			}
 		}
 
-		ofstream MyFile(GetDir() + "/PlayerZero/Contacts/" + contact.YourFriend.MyName + ".ini");
-
-		for (int i = 0; i < MyCon.size(); i++)
-		{
-			MyFile << "\n";
-			MyFile << MyCon[i];
-		}
-
-		MyFile.close();
+		WriteFile(DirectContacts + "/" + contact.YourFriend.MyName + ".ini", MyCon);
 	}
 
-	void SaveOutfits(PZclass::ClothX cloths, bool male)
+	void SaveOutfits(ClothX cloths, const std::string& dir)
 	{
 		LoggerLight("Savecloths == " + cloths.Title);
 
-		string OutputFolder;
-
-		if (male)
-			OutputFolder = GetDir() + "/Outfits/Male";
-		else
-			OutputFolder = GetDir() + "/Outfits/Female";
-
-		vector<string> MyCon = {
+		std::vector<std::string> MyCon = {
 			"[ClothX]",
 			"Title= " + cloths.Title
 		};
@@ -2358,19 +1585,11 @@ namespace PZSys
 		for (int i = 0; i < cloths.ExtraB.size(); i++)
 			MyCon.push_back("ExtraB=" + std::to_string(cloths.ExtraB[i]));
 
-		ofstream MyFile(OutputFolder + "/" + cloths.Title + ".ini");
-
-		for (int i = 0; i < MyCon.size(); i++)
-		{
-			MyFile << "\n";
-			MyFile << MyCon[i];
-		}
-
-		MyFile.close();
+		WriteFile(dir + "/" + cloths.Title + ".ini", MyCon);
 	}
 	void OutfitFolderTest()
 	{
-		const std::vector<std::string> ReadMe = {
+		std::vector<std::string> ReadMe = {
 			"This txt file is a marker that this folder has Outfits to load.",
 			"If the any of the two folders are empty delete this txt file.",
 			"If You wish to manualy alter any of the files or add your own,",
@@ -2384,274 +1603,287 @@ namespace PZSys
 			"",
 			"https://www.youtube.com/@adopcalipt"
 		};
-		const std::vector<PZclass::ClothX> MaleOut = {
-			PZclass::ClothX("MaleBeachThe Bare Chest", { 0, 0, -1, 15, 16, 0, 1, 16, 15, 0, 0, 15 }, { 0, 0, 0, 0, 1, 0, 7, 2, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBeachThe Dude", { 0, 0, -1, 5, 15, 0, 16, 0, 15, 0, 0, 17 }, { 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 4 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBeachThe Heat", { 0, 0, -1, 5, 18, 0, 16, 0, 15, 0, 0, 5 }, { 0, 0, 0, 0, 3, 0, 4, 0, 0, 0, 0, 7 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBeachThe Paradise", { 0, 0, -1, 0, 18, 0, 1, 0, 15, 0, 0, 1 }, { 0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBeachThe Skimpy", { 0, 0, -1, 15, 18, 0, 5, 0, 15, 0, 0, 15 }, { 0, 0, 0, 0, 11, 0, 3, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBeachThe Summer Rays", { 0, 0, -1, 5, 16, 0, 16, 17, 15, 0, 0, 17 }, { 0, 0, 0, 0, 2, 0, 8, 2, 0, 0, 0, 3 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBeachThe Surfer", { 0, 0, -1, 5, 12, 0, 16, 0, 15, 0, 0, 17 }, { 0, 0, 0, 0, 4, 0, 6, 0, 0, 0, 0, 5 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBeachThe Tidal Wave", { 0, 0, -1, 0, 6, 0, 16, 0, 15, 0, 0, 44 }, { 0, 0, 0, 0, 10, 0, 6, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBikerAvarus", { 0, 0, -1, 19, 72, 0, 53, 0, 82, 0, 0, 157 }, { 0, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0 }, { 83, 24, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
-			PZclass::ClothX("MaleBikerBlazer", { 0, 0, -1, 14, 62, 0, 7, 0, 23, 0, 0, 167 }, { 0, 0, 0, 0, 2, 0, 15, 0, 2, 0, 0, 3 }, { 76, 0, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBikerChimera", { 0, 0, -1, 130, 73, 0, 56, 0, 15, 0, 0, 162 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 3 }, { 83, 8, -1, -1, -1 }, { 0, 6, 0, 0, 0 }),
-			PZclass::ClothX("MaleBikerFaggio", { 0, 0, 10, 6, 4, 0, 23, 0, 15, 0, 0, 184 }, { 0, 0, 0, 0, 4, 0, 9, 0, 0, 0, 0, 1 }, { 29, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBikerHakuchou", { 0, 0, -1, 6, 9, 0, 51, 0, 15, 0, 0, 165 }, { 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 1 }, { 83, 25, -1, -1, -1 }, { 5, 7, 0, 0, 0 }),
-			PZclass::ClothX("MaleBikerManchez", { 0, 0, -1, 0, 69, 0, 7, 0, 83, 0, 0, 180 }, { 0, 0, 0, 0, 2, 0, 1, 0, 0, 0, 0, 2 }, { 77, 25, -1, -1, -1 }, { 18, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBikerNightblade", { 0, 0, -1, 116, 74, 0, 52, 0, 15, 0, 0, 173 }, { 0, 0, 0, 1, 4, 0, 0, 0, 0, 0, 0, 2 }, { -1, 8, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
-			PZclass::ClothX("MaleBikerRat Bike", { 0, 0, -1, 30, 72, 0, 50, 0, 83, 0, 0, 158 }, { 0, 0, 0, 1, 4, 0, 0, 0, 8, 0, 0, 1 }, { -1, 24, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBikerWolfsbane", { 0, 0, -1, 24, 76, 0, 56, 0, 15, 0, 0, 174 }, { 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0 }, { -1, 9, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBikerZombie", { 0, 0, -1, 22, 4, 0, 53, 0, 75, 0, 0, 181 }, { 0, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0 }, { -1, 0, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness CasualThe Alligator", { 0, 0, -1, 4, 23, 0, 20, 12, 10, 0, 0, 23 }, { 0, 0, 0, 0, 8, 0, 8, 2, 2, 0, 0, 0 }, { 5, 7, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness CasualThe Bulldog", { 0, 0, -1, 11, 10, 0, 11, 10, 15, 0, 0, 26 }, { 0, 0, 0, 0, 0, 0, 12, 2, 0, 0, 0, 9 }, { 12, 17, -1, -1, -1 }, { 0, 6, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness CasualThe Collector", { 0, 0, -1, 11, 23, 0, 21, 25, 6, 0, 0, 25 }, { 0, 0, 0, 0, 8, 0, 6, 13, 12, 0, 0, 9 }, { 12, 18, -1, -1, -1 }, { 4, 7, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness CasualThe Devil Chic", { 0, 0, -1, 4, 4, 0, 20, 25, 4, 0, 0, 24 }, { 0, 0, 0, 0, 0, 0, 7, 2, 0, 0, 0, 3 }, { 12, 18, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness CasualThe Eccentric", { 0, 0, -1, 11, 23, 0, 1, 22, 6, 0, 0, 25 }, { 0, 0, 0, 0, 2, 0, 11, 8, 7, 0, 0, 5 }, { 27, -1, -1, -1, -1 }, { 5, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness CasualThe European", { 0, 0, -1, 11, 23, 0, 10, 12, 15, 0, 0, 26 }, { 0, 0, 0, 0, 12, 0, 0, 0, 0, 0, 0, 5 }, { 26, 18, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness CasualThe Mogul", { 0, 0, -1, 11, 22, 0, 20, 25, 6, 0, 0, 25 }, { 0, 0, 0, 0, 7, 0, 2, 10, 11, 0, 0, 0 }, { -1, 18, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness CasualThe Mr. Frost", { 0, 0, -1, 4, 4, 0, 20, 25, 4, 0, 0, 24 }, { 0, 0, 0, 0, 2, 0, 5, 2, 0, 0, 0, 4 }, { 7, 18, -1, -1, -1 }, { 1, 2, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness CasualThe Tally-ho", { 0, 0, -1, 4, 22, 0, 20, 25, 4, 0, 0, 24 }, { 0, 0, 0, 0, 11, 0, 6, 4, 1, 0, 0, 0 }, { 7, -1, -1, -1, -1 }, { 3, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness CasualThe Victorious", { 0, 0, -1, 14, 22, 0, 20, 21, 28, 0, 0, 27 }, { 0, 0, 0, 0, 1, 0, 11, 1, 8, 0, 0, 1 }, { 26, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness SmartThe Collegiate", { 0, 0, -1, 4, 23, 0, 20, 25, 26, 0, 0, 23 }, { 0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 2 }, { 26, 17, -1, -1, -1 }, { 2, 4, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness SmartThe Country Club", { 0, 0, -1, 4, 23, 0, 21, 0, 25, 0, 0, 24 }, { 0, 0, 0, 0, 10, 0, 11, 0, 11, 0, 0, 10 }, { 26, -1, -1, -1, -1 }, { 12, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness SmartThe Discoteque", { 0, 0, -1, 4, 22, 0, 10, 25, 26, 0, 0, 23 }, { 0, 0, 0, 0, 12, 0, 0, 0, 12, 0, 0, 3 }, { 12, 18, -1, -1, -1 }, { 1, 3, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness SmartThe Egotist", { 0, 0, -1, 4, 23, 0, 20, 25, 26, 0, 0, 24 }, { 0, 0, 0, 0, 3, 0, 3, 15, 3, 0, 0, 3 }, { -1, 13, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness SmartThe Gentry", { 0, 0, -1, 4, 22, 0, 20, 22, 26, 0, 0, 24 }, { 0, 0, 0, 0, 6, 0, 0, 10, 5, 0, 0, 6 }, { 27, -1, -1, -1, -1 }, { 8, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness SmartThe High Roller", { 0, 0, -1, 14, 10, 0, 20, 22, 26, 0, 0, 27 }, { 0, 0, 0, 0, 0, 0, 7, 4, 3, 0, 0, 1 }, { 27, -1, -1, -1, -1 }, { 1, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness SmartThe Panther", { 0, 0, -1, 4, 10, 0, 10, 25, 4, 0, 0, 28 }, { 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0 }, { -1, 17, -1, -1, -1 }, { 0, 5, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness SmartThe Sophisticate", { 0, 0, -1, 4, 13, 0, 20, 21, 10, 0, 0, 24 }, { 0, 0, 0, 0, 0, 0, 8, 11, 10, 0, 0, 1 }, { 27, 18, -1, -1, -1 }, { 4, 5, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness SmartThe Tycoon", { 0, 0, -1, 4, 10, 0, 10, 25, 4, 0, 0, 28 }, { 0, 0, 0, 0, 2, 0, 0, 14, 2, 0, 0, 2 }, { 26, 17, -1, -1, -1 }, { 2, 6, 0, 0, 0 }),
-			PZclass::ClothX("MaleBusiness SmartThe Yeehaw", { 0, 0, -1, 1, 22, 0, 20, 0, 12, 0, 0, 24 }, { 0, 0, 0, 0, 6, 0, 2, 0, 5, 0, 0, 7 }, { 13, 18, -1, -1, -1 }, { 2, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCasualThe Denims", { 0, 0, -1, 8, 4, 0, 4, 0, 15, 0, 0, 38 }, { 0, 0, 0, 0, 4, 0, 1, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCasualThe Hangout", { 0, 0, -1, 0, 0, 0, 1, 17, 15, 0, 0, 33 }, { 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCasualThe Mellow", { 0, 0, -1, 12, 1, 0, 1, 0, 15, 0, 0, 41 }, { 0, 0, 0, 0, 14, 0, 4, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCasualThe Plain White", { 0, 0, -1, 0, 0, 0, 0, 0, 15, 0, 0, 1 }, { 0, 0, 0, 0, 2, 0, 10, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCasualThe Simple", { 0, 0, -1, 0, 1, 0, 1, 0, 15, 0, 0, 22 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOAlpha", { 0, 0, -1, 4, 82, 0, 12, 15, 0, 0, 0, 192 }, { 0, 0, 0, 0, 6, 0, 3, 0, 1, 0, 0, 1 }, { -1, 8, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOAnonymous", { 0, 106, -1, 131, 87, 0, 62, 0, 15, 0, 0, 205 }, { 0, 25, 0, 0, 9, 0, 3, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOBroker", { 0, 0, -1, 4, 37, 0, 20, 38, 10, 0, 0, 142 }, { 0, 0, 0, 0, 2, 0, 5, 6, 2, 0, 0, 2 }, { 29, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOChief", { 0, 0, -1, 12, 37, 0, 20, 0, 73, 0, 0, 137 }, { 0, 0, 0, 0, 2, 0, 5, 0, 1, 0, 0, 0 }, { -1, 17, -1, -1, -1 }, { 0, 9, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOClown", { 0, 95, -1, 44, 39, 0, 27, 0, 15, 0, 0, 66 }, { 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOCommander", { 0, 0, -1, 22, 92, 0, 24, 0, 15, 0, 0, 228 }, { 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 14 }, { 114, 5, -1, -1, -1 }, { 10, 1, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOCreator", { 0, 0, -1, 12, 13, 0, 7, 0, 11, 0, 0, 35 }, { 0, 0, 0, 0, 0, 0, 15, 0, 2, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEODemon", { 0, 94, -1, 33, 79, 0, 52, 0, 15, 0, 0, 153 }, { 0, 4, 0, 0, 0, 0, 1, 0, 0, 0, 0, 7 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEODirector", { 0, 0, -1, 4, 37, 0, 15, 28, 31, 0, 0, 140 }, { 0, 0, 0, 0, 0, 0, 10, 1, 0, 0, 0, 2 }, { -1, 17, -1, -1, -1 }, { 0, 5, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOFat Cat", { 0, 0, -1, 4, 20, 0, 40, 11, 35, 0, 0, 27 }, { 0, 0, 0, 0, 2, 0, 9, 2, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOFounder", { 0, 0, -1, 0, 0, 0, 2, 0, 15, 0, 0, 0 }, { 0, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 1 }, { -1, -1, 0, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOGeneral", { 0, 0, -1, 4, 9, 0, 27, 0, 15, 0, 0, 138 }, { 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 2 }, { 6, 16, -1, -1, -1 }, { 5, 2, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOGuerilla", { 0, 0, -1, 141, 87, 0, 60, 0, 15, 0, 0, 221 }, { 0, 0, 0, 16, 16, 0, 3, 0, 0, 0, 0, 9 }, { 108, 5, -1, -1, -1 }, { 16, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOGunrunner", { 0, 0, -1, 145, 87, 0, 62, 0, 15, 0, 0, 222 }, { 0, 0, 0, 19, 17, 0, 7, 0, 0, 0, 0, 23 }, { 107, 5, -1, -1, -1 }, { 17, 5, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOHedonist", { 0, 0, -1, 14, 56, 0, 37, 0, 15, 0, 0, 114 }, { 0, 0, 0, 0, 5, 0, 3, 0, 0, 0, 0, 5 }, { 13, 8, -1, -1, -1 }, { 2, 5, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOIcon", { 0, 0, -1, 6, 83, 0, 29, 89, 15, 0, 0, 190 }, { 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0 }, { 96, -1, -1, -1, -1 }, { 6, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOInstigator", { 0, 107, -1, 41, 89, 0, 61, 0, 15, 0, 0, 208 }, { 0, 18, 0, 0, 20, 0, 0, 0, 0, 0, 0, 11 }, { 96, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOMastermind", { 0, 0, -1, 35, 79, 0, 43, 0, 15, 0, 0, 204 }, { 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0 }, { 96, 7, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOMoon Curser", { 0, 104, -1, 141, 87, 0, 60, 0, 15, 0, 0, 220 }, { 0, 25, 0, 3, 3, 0, 0, 0, 0, 0, 0, 20 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOPioneer", { 0, 0, -1, 4, 63, 0, 2, 0, 15, 0, 0, 139 }, { 0, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0, 3 }, { -1, 3, -1, -1, -1 }, { 0, 9, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOPlayboy", { 0, 0, -1, 4, 60, 0, 36, 0, 72, 0, 0, 108 }, { 0, 0, 0, 0, 2, 0, 3, 0, 3, 0, 0, 4 }, { -1, 13, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOPremier", { 0, 0, -1, 23, 43, 0, 57, 0, 15, 4, 0, 5 }, { 0, 0, 0, 0, 0, 0, 6, 0, 0, 1, 0, 2 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOPresident", { 0, 0, -1, 6, 7, 0, 28, 0, 15, 0, 0, 75 }, { 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 10 }, { 66, 18, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEORecon Leader", { 0, 0, -1, 37, 33, 0, 27, 0, 15, 10, 0, 222 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 20 }, { 112, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEORingleader", { 0, 0, -1, 4, 78, 0, 57, 0, 0, 0, 0, 191 }, { 0, 0, 0, 0, 7, 0, 4, 0, 5, 0, 0, 0 }, { 55, 13, -1, -1, -1 }, { 19, 2, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEORoller", { 0, 0, -1, 0, 43, 0, 57, 51, 81, 0, 0, 170 }, { 0, 0, 0, 0, 1, 0, 6, 0, 2, 0, 0, 3 }, { -1, 18, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOStanduot", { 0, 0, -1, 0, 82, 0, 57, 0, 15, 0, 0, 193 }, { 0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 5 }, { 96, 7, -1, -1, -1 }, { 1, 2, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOSurvivalist", { 0, 0, -1, 141, 87, 0, 60, 0, 101, 0, 0, 212 }, { 0, 0, 0, 19, 6, 0, 7, 0, 6, 0, 0, 18 }, { 105, 23, -1, -1, -1 }, { 23, 9, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOTop Dog", { 0, 0, -1, 0, 43, 0, 57, 15, 15, 0, 0, 193 }, { 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 22 }, { 55, 2, 32, -1, -1 }, { 1, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOTrailblazer", { 0, 0, -1, 4, 78, 0, 57, 123, 23, 0, 0, 191 }, { 0, 0, 0, 0, 6, 0, 9, 0, 0, 0, 0, 23 }, { 96, 7, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOVillain", { 0, 101, -1, 33, 78, 0, 57, 0, 71, 0, 0, 203 }, { 0, 13, 0, 0, 2, 0, 10, 0, 3, 0, 0, 25 }, { 102, 13, -1, -1, -1 }, { 7, 5, 0, 0, 0 }),
-			PZclass::ClothX("MaleCEOWarlord", { 0, 0, -1, 6, 59, 0, 27, 85, 5, 0, 0, 35 }, { 0, 0, 0, 0, 7, 0, 0, 0, 2, 0, 0, 1 }, { 55, 23, -1, -1, -1 }, { 1, 9, 0, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Deluxe", { 0, 0, -1, 14, 4, 0, 29, 49, 65, 0, 0, 74 }, { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 }, { 29, 18, 20, -1, -1 }, { 1, 2, 0, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Exclusive", { 0, 0, -1, 4, 4, 0, 28, 0, 15, 0, 0, 75 }, { 0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 10 }, { 6, 13, 17, -1, -1 }, { 1, 0, 2, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Flash", { 0, 0, -1, 14, 26, 0, 28, 0, 23, 0, 0, 74 }, { 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 6 }, { 7, 8, 5, -1, -1 }, { 0, 0, 2, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Grand", { 0, 0, -1, 6, 26, 0, 28, 52, 5, 0, 0, 70 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4 }, { -1, 13, 14, -1, -1 }, { 0, 2, 2, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Luxor", { 0, 0, -1, 14, 7, 0, 22, 50, 65, 0, 0, 74 }, { 0, 0, 0, 0, 4, 0, 11, 0, 3, 0, 0, 5 }, { -1, 18, 17, -1, -1 }, { 0, 2, 0, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Midas", { 0, 0, -1, 0, 37, 0, 29, 50, 15, 0, 0, 71 }, { 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 }, { 4, 18, 8, -1, -1 }, { 1, 5, 0, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Perseus", { 0, 0, -1, 0, 7, 0, 29, 0, 15, 0, 0, 73 }, { 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 5 }, { -1, 13, 14, -1, -1 }, { 0, 2, 0, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Pimp", { 0, 0, -1, 4, 26, 0, 28, 54, 10, 0, 0, 70 }, { 0, 0, 0, 0, 9, 0, 4, 0, 2, 0, 0, 1 }, { 12, 10, 14, -1, -1 }, { 4, 4, 0, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Refined", { 0, 0, -1, 50, 37, 0, 12, 0, 23, 0, 0, 72 }, { 0, 0, 0, 0, 2, 0, 3, 0, 1, 0, 0, 1 }, { 7, -1, 20, -1, -1 }, { 2, 0, 4, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Sessanta Nove", { 0, 0, -1, 6, 4, 0, 29, 49, 5, 0, 0, 74 }, { 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 3 }, { 7, 18, 11, -1, -1 }, { 2, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Talent", { 0, 0, -1, 1, 26, 0, 28, 53, 65, 0, 0, 62 }, { 0, 0, 0, 0, 11, 0, 3, 1, 10, 0, 0, 0 }, { 4, 7, 20, -1, -1 }, { 0, 0, 3, 0, 0 }),
-			PZclass::ClothX("MaleDesignerThe Vogue", { 0, 0, -1, 6, 26, 0, 28, 55, 5, 0, 0, 72 }, { 0, 0, 0, 0, 6, 0, 5, 1, 0, 0, 0, 0 }, { -1, 10, 8, -1, -1 }, { 0, 1, 1, 0, 0 }),
-			PZclass::ClothX("MaleFlashyThe Blues", { 0, 0, -1, 12, 25, 0, 10, 29, 31, 0, 0, 31 }, { 0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 0, 2 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleFlashyThe Musician", { 0, 0, -1, 6, 4, 0, 10, 0, 5, 0, 0, 4 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleFlashyThe Royal", { 0, 0, -1, 6, 26, 0, 20, 0, 5, 0, 0, 4 }, { 0, 0, 0, 0, 0, 0, 3, 0, 2, 0, 0, 14 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleFlashyThe V.I.P.", { 0, 0, -1, 12, 24, 0, 10, 27, 35, 0, 0, 30 }, { 0, 0, 0, 0, 0, 0, 0, 2, 1, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleHipsterActivist", { 0, 0, -1, 8, 26, 0, 23, 0, 15, 0, 0, 38 }, { 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 1 }, { 28, 20, -1, -1, -1 }, { 5, 1, 0, 0, 0 }),
-			PZclass::ClothX("MaleHipsterAficionado", { 0, 0, -1, 1, 26, 0, 22, 0, 38, 0, 0, 35 }, { 0, 0, 0, 0, 11, 0, 8, 0, 0, 0, 0, 0 }, { 28, 20, -1, -1, -1 }, { 2, 3, 0, 0, 0 }),
-			PZclass::ClothX("MaleHipsterArtist", { 0, 0, -1, 11, 28, 0, 23, 0, 15, 0, 0, 43 }, { 0, 0, 0, 0, 12, 0, 4, 0, 0, 0, 0, 0 }, { 29, 20, -1, -1, -1 }, { 6, 0, 0, 0, 0 }),
-			PZclass::ClothX("MaleHipsterEco", { 0, 0, -1, 11, 26, 0, 22, 11, 15, 0, 0, 42 }, { 0, 0, 0, 0, 3, 0, 7, 2, 0, 0, 0, 0 }, { 28, 20, -1, -1, -1 }, { 3, 2, 0, 0, 0 }),
-			PZclass::ClothX("MaleHipsterElitist", { 0, 0, -1, 1, 26, 0, 23, 0, 43, 0, 0, 35 }, { 0, 0, 0, 0, 7, 0, 6, 0, 3, 0, 0, 3 }, { -1, 19, -1, -1, -1 }, { 0, 6, 0, 0, 0 }),
-			PZclass::ClothX("MaleHipsterFitness", { 0, 0, -1, 0, 27, 0, 22, 0, 15, 0, 0, 39 }, { 0, 0, 0, 0, 5, 0, 10, 0, 0, 0, 0, 0 }, { 29, 19, -1, -1, -1 }, { 7, 2, 0, 0, 0 }),
-			PZclass::ClothX("MaleHipsterIronic", { 0, 0, -1, 11, 26, 0, 23, 11, 6, 0, 0, 40 }, { 0, 0, 0, 0, 9, 0, 3, 2, 12, 0, 0, 0 }, { 29, 20, -1, -1, -1 }, { 5, 6, 0, 0, 0 }),
-			PZclass::ClothX("MaleHipsterNatural", { 0, 0, -1, 1, 26, 0, 22, 0, 38, 0, 0, 35 }, { 0, 0, 0, 0, 6, 0, 0, 0, 1, 0, 0, 2 }, { 29, 19, -1, -1, -1 }, { 2, 4, 0, 0, 0 }),
-			PZclass::ClothX("MaleHipsterPop Up", { 0, 0, -1, 0, 28, 0, 23, 30, 15, 0, 0, 33 }, { 0, 0, 0, 0, 2, 0, 14, 4, 0, 0, 0, 0 }, { 28, 20, -1, -1, -1 }, { 1, 5, 0, 0, 0 }),
-			PZclass::ClothX("MaleHipsterUrban Hippy", { 0, 0, -1, 8, 26, 0, 22, 30, 15, 0, 0, 38 }, { 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 4 }, { 28, 20, -1, -1, -1 }, { 0, 7, 0, 0, 0 })
+		std::vector<ClothX> MaleOut = {
+			ClothX("MaleBeachThe Bare Chest", { 0, 0, -1, 15, 16, 0, 1, 16, 15, 0, 0, 15 }, { 0, 0, 0, 0, 1, 0, 7, 2, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBeachThe Dude", { 0, 0, -1, 5, 15, 0, 16, 0, 15, 0, 0, 17 }, { 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 4 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBeachThe Heat", { 0, 0, -1, 5, 18, 0, 16, 0, 15, 0, 0, 5 }, { 0, 0, 0, 0, 3, 0, 4, 0, 0, 0, 0, 7 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBeachThe Paradise", { 0, 0, -1, 0, 18, 0, 1, 0, 15, 0, 0, 1 }, { 0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBeachThe Skimpy", { 0, 0, -1, 15, 18, 0, 5, 0, 15, 0, 0, 15 }, { 0, 0, 0, 0, 11, 0, 3, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBeachThe Summer Rays", { 0, 0, -1, 5, 16, 0, 16, 17, 15, 0, 0, 17 }, { 0, 0, 0, 0, 2, 0, 8, 2, 0, 0, 0, 3 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBeachThe Surfer", { 0, 0, -1, 5, 12, 0, 16, 0, 15, 0, 0, 17 }, { 0, 0, 0, 0, 4, 0, 6, 0, 0, 0, 0, 5 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBeachThe Tidal Wave", { 0, 0, -1, 0, 6, 0, 16, 0, 15, 0, 0, 44 }, { 0, 0, 0, 0, 10, 0, 6, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBikerAvarus", { 0, 0, -1, 19, 72, 0, 53, 0, 82, 0, 0, 157 }, { 0, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0 }, { 83, 24, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
+			ClothX("MaleBikerBlazer", { 0, 0, -1, 14, 62, 0, 7, 0, 23, 0, 0, 167 }, { 0, 0, 0, 0, 2, 0, 15, 0, 2, 0, 0, 3 }, { 76, 0, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
+			ClothX("MaleBikerChimera", { 0, 0, -1, 130, 73, 0, 56, 0, 15, 0, 0, 162 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 3 }, { 83, 8, -1, -1, -1 }, { 0, 6, 0, 0, 0 }),
+			ClothX("MaleBikerFaggio", { 0, 0, 10, 6, 4, 0, 23, 0, 15, 0, 0, 184 }, { 0, 0, 0, 0, 4, 0, 9, 0, 0, 0, 0, 1 }, { 29, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBikerHakuchou", { 0, 0, -1, 6, 9, 0, 51, 0, 15, 0, 0, 165 }, { 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 1 }, { 83, 25, -1, -1, -1 }, { 5, 7, 0, 0, 0 }),
+			ClothX("MaleBikerManchez", { 0, 0, -1, 0, 69, 0, 7, 0, 83, 0, 0, 180 }, { 0, 0, 0, 0, 2, 0, 1, 0, 0, 0, 0, 2 }, { 77, 25, -1, -1, -1 }, { 18, 0, 0, 0, 0 }),
+			ClothX("MaleBikerNightblade", { 0, 0, -1, 116, 74, 0, 52, 0, 15, 0, 0, 173 }, { 0, 0, 0, 1, 4, 0, 0, 0, 0, 0, 0, 2 }, { -1, 8, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
+			ClothX("MaleBikerRat Bike", { 0, 0, -1, 30, 72, 0, 50, 0, 83, 0, 0, 158 }, { 0, 0, 0, 1, 4, 0, 0, 0, 8, 0, 0, 1 }, { -1, 24, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBikerWolfsbane", { 0, 0, -1, 24, 76, 0, 56, 0, 15, 0, 0, 174 }, { 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0 }, { -1, 9, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBikerZombie", { 0, 0, -1, 22, 4, 0, 53, 0, 75, 0, 0, 181 }, { 0, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0 }, { -1, 0, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBusiness CasualThe Alligator", { 0, 0, -1, 4, 23, 0, 20, 12, 10, 0, 0, 23 }, { 0, 0, 0, 0, 8, 0, 8, 2, 2, 0, 0, 0 }, { 5, 7, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBusiness CasualThe Bulldog", { 0, 0, -1, 11, 10, 0, 11, 10, 15, 0, 0, 26 }, { 0, 0, 0, 0, 0, 0, 12, 2, 0, 0, 0, 9 }, { 12, 17, -1, -1, -1 }, { 0, 6, 0, 0, 0 }),
+			ClothX("MaleBusiness CasualThe Collector", { 0, 0, -1, 11, 23, 0, 21, 25, 6, 0, 0, 25 }, { 0, 0, 0, 0, 8, 0, 6, 13, 12, 0, 0, 9 }, { 12, 18, -1, -1, -1 }, { 4, 7, 0, 0, 0 }),
+			ClothX("MaleBusiness CasualThe Devil Chic", { 0, 0, -1, 4, 4, 0, 20, 25, 4, 0, 0, 24 }, { 0, 0, 0, 0, 0, 0, 7, 2, 0, 0, 0, 3 }, { 12, 18, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
+			ClothX("MaleBusiness CasualThe Eccentric", { 0, 0, -1, 11, 23, 0, 1, 22, 6, 0, 0, 25 }, { 0, 0, 0, 0, 2, 0, 11, 8, 7, 0, 0, 5 }, { 27, -1, -1, -1, -1 }, { 5, 0, 0, 0, 0 }),
+			ClothX("MaleBusiness CasualThe European", { 0, 0, -1, 11, 23, 0, 10, 12, 15, 0, 0, 26 }, { 0, 0, 0, 0, 12, 0, 0, 0, 0, 0, 0, 5 }, { 26, 18, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
+			ClothX("MaleBusiness CasualThe Mogul", { 0, 0, -1, 11, 22, 0, 20, 25, 6, 0, 0, 25 }, { 0, 0, 0, 0, 7, 0, 2, 10, 11, 0, 0, 0 }, { -1, 18, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBusiness CasualThe Mr. Frost", { 0, 0, -1, 4, 4, 0, 20, 25, 4, 0, 0, 24 }, { 0, 0, 0, 0, 2, 0, 5, 2, 0, 0, 0, 4 }, { 7, 18, -1, -1, -1 }, { 1, 2, 0, 0, 0 }),
+			ClothX("MaleBusiness CasualThe Tally-ho", { 0, 0, -1, 4, 22, 0, 20, 25, 4, 0, 0, 24 }, { 0, 0, 0, 0, 11, 0, 6, 4, 1, 0, 0, 0 }, { 7, -1, -1, -1, -1 }, { 3, 0, 0, 0, 0 }),
+			ClothX("MaleBusiness CasualThe Victorious", { 0, 0, -1, 14, 22, 0, 20, 21, 28, 0, 0, 27 }, { 0, 0, 0, 0, 1, 0, 11, 1, 8, 0, 0, 1 }, { 26, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
+			ClothX("MaleBusiness SmartThe Collegiate", { 0, 0, -1, 4, 23, 0, 20, 25, 26, 0, 0, 23 }, { 0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 2 }, { 26, 17, -1, -1, -1 }, { 2, 4, 0, 0, 0 }),
+			ClothX("MaleBusiness SmartThe Country Club", { 0, 0, -1, 4, 23, 0, 21, 0, 25, 0, 0, 24 }, { 0, 0, 0, 0, 10, 0, 11, 0, 11, 0, 0, 10 }, { 26, -1, -1, -1, -1 }, { 12, 0, 0, 0, 0 }),
+			ClothX("MaleBusiness SmartThe Discoteque", { 0, 0, -1, 4, 22, 0, 10, 25, 26, 0, 0, 23 }, { 0, 0, 0, 0, 12, 0, 0, 0, 12, 0, 0, 3 }, { 12, 18, -1, -1, -1 }, { 1, 3, 0, 0, 0 }),
+			ClothX("MaleBusiness SmartThe Egotist", { 0, 0, -1, 4, 23, 0, 20, 25, 26, 0, 0, 24 }, { 0, 0, 0, 0, 3, 0, 3, 15, 3, 0, 0, 3 }, { -1, 13, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleBusiness SmartThe Gentry", { 0, 0, -1, 4, 22, 0, 20, 22, 26, 0, 0, 24 }, { 0, 0, 0, 0, 6, 0, 0, 10, 5, 0, 0, 6 }, { 27, -1, -1, -1, -1 }, { 8, 0, 0, 0, 0 }),
+			ClothX("MaleBusiness SmartThe High Roller", { 0, 0, -1, 14, 10, 0, 20, 22, 26, 0, 0, 27 }, { 0, 0, 0, 0, 0, 0, 7, 4, 3, 0, 0, 1 }, { 27, -1, -1, -1, -1 }, { 1, 0, 0, 0, 0 }),
+			ClothX("MaleBusiness SmartThe Panther", { 0, 0, -1, 4, 10, 0, 10, 25, 4, 0, 0, 28 }, { 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0 }, { -1, 17, -1, -1, -1 }, { 0, 5, 0, 0, 0 }),
+			ClothX("MaleBusiness SmartThe Sophisticate", { 0, 0, -1, 4, 13, 0, 20, 21, 10, 0, 0, 24 }, { 0, 0, 0, 0, 0, 0, 8, 11, 10, 0, 0, 1 }, { 27, 18, -1, -1, -1 }, { 4, 5, 0, 0, 0 }),
+			ClothX("MaleBusiness SmartThe Tycoon", { 0, 0, -1, 4, 10, 0, 10, 25, 4, 0, 0, 28 }, { 0, 0, 0, 0, 2, 0, 0, 14, 2, 0, 0, 2 }, { 26, 17, -1, -1, -1 }, { 2, 6, 0, 0, 0 }),
+			ClothX("MaleBusiness SmartThe Yeehaw", { 0, 0, -1, 1, 22, 0, 20, 0, 12, 0, 0, 24 }, { 0, 0, 0, 0, 6, 0, 2, 0, 5, 0, 0, 7 }, { 13, 18, -1, -1, -1 }, { 2, 0, 0, 0, 0 }),
+			ClothX("MaleCasualThe Denims", { 0, 0, -1, 8, 4, 0, 4, 0, 15, 0, 0, 38 }, { 0, 0, 0, 0, 4, 0, 1, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCasualThe Hangout", { 0, 0, -1, 0, 0, 0, 1, 17, 15, 0, 0, 33 }, { 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCasualThe Mellow", { 0, 0, -1, 12, 1, 0, 1, 0, 15, 0, 0, 41 }, { 0, 0, 0, 0, 14, 0, 4, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCasualThe Plain White", { 0, 0, -1, 0, 0, 0, 0, 0, 15, 0, 0, 1 }, { 0, 0, 0, 0, 2, 0, 10, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCasualThe Simple", { 0, 0, -1, 0, 1, 0, 1, 0, 15, 0, 0, 22 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEOAlpha", { 0, 0, -1, 4, 82, 0, 12, 15, 0, 0, 0, 192 }, { 0, 0, 0, 0, 6, 0, 3, 0, 1, 0, 0, 1 }, { -1, 8, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
+			ClothX("MaleCEOAnonymous", { 0, 106, -1, 131, 87, 0, 62, 0, 15, 0, 0, 205 }, { 0, 25, 0, 0, 9, 0, 3, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEOBroker", { 0, 0, -1, 4, 37, 0, 20, 38, 10, 0, 0, 142 }, { 0, 0, 0, 0, 2, 0, 5, 6, 2, 0, 0, 2 }, { 29, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEOChief", { 0, 0, -1, 12, 37, 0, 20, 0, 73, 0, 0, 137 }, { 0, 0, 0, 0, 2, 0, 5, 0, 1, 0, 0, 0 }, { -1, 17, -1, -1, -1 }, { 0, 9, 0, 0, 0 }),
+			ClothX("MaleCEOClown", { 0, 95, -1, 44, 39, 0, 27, 0, 15, 0, 0, 66 }, { 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEOCommander", { 0, 0, -1, 22, 92, 0, 24, 0, 15, 0, 0, 228 }, { 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 14 }, { 114, 5, -1, -1, -1 }, { 10, 1, 0, 0, 0 }),
+			ClothX("MaleCEOCreator", { 0, 0, -1, 12, 13, 0, 7, 0, 11, 0, 0, 35 }, { 0, 0, 0, 0, 0, 0, 15, 0, 2, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEODemon", { 0, 94, -1, 33, 79, 0, 52, 0, 15, 0, 0, 153 }, { 0, 4, 0, 0, 0, 0, 1, 0, 0, 0, 0, 7 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEODirector", { 0, 0, -1, 4, 37, 0, 15, 28, 31, 0, 0, 140 }, { 0, 0, 0, 0, 0, 0, 10, 1, 0, 0, 0, 2 }, { -1, 17, -1, -1, -1 }, { 0, 5, 0, 0, 0 }),
+			ClothX("MaleCEOFat Cat", { 0, 0, -1, 4, 20, 0, 40, 11, 35, 0, 0, 27 }, { 0, 0, 0, 0, 2, 0, 9, 2, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEOFounder", { 0, 0, -1, 0, 0, 0, 2, 0, 15, 0, 0, 0 }, { 0, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 1 }, { -1, -1, 0, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEOGeneral", { 0, 0, -1, 4, 9, 0, 27, 0, 15, 0, 0, 138 }, { 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 2 }, { 6, 16, -1, -1, -1 }, { 5, 2, 0, 0, 0 }),
+			ClothX("MaleCEOGuerilla", { 0, 0, -1, 141, 87, 0, 60, 0, 15, 0, 0, 221 }, { 0, 0, 0, 16, 16, 0, 3, 0, 0, 0, 0, 9 }, { 108, 5, -1, -1, -1 }, { 16, 0, 0, 0, 0 }),
+			ClothX("MaleCEOGunrunner", { 0, 0, -1, 145, 87, 0, 62, 0, 15, 0, 0, 222 }, { 0, 0, 0, 19, 17, 0, 7, 0, 0, 0, 0, 23 }, { 107, 5, -1, -1, -1 }, { 17, 5, 0, 0, 0 }),
+			ClothX("MaleCEOHedonist", { 0, 0, -1, 14, 56, 0, 37, 0, 15, 0, 0, 114 }, { 0, 0, 0, 0, 5, 0, 3, 0, 0, 0, 0, 5 }, { 13, 8, -1, -1, -1 }, { 2, 5, 0, 0, 0 }),
+			ClothX("MaleCEOIcon", { 0, 0, -1, 6, 83, 0, 29, 89, 15, 0, 0, 190 }, { 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0 }, { 96, -1, -1, -1, -1 }, { 6, 0, 0, 0, 0 }),
+			ClothX("MaleCEOInstigator", { 0, 107, -1, 41, 89, 0, 61, 0, 15, 0, 0, 208 }, { 0, 18, 0, 0, 20, 0, 0, 0, 0, 0, 0, 11 }, { 96, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEOMastermind", { 0, 0, -1, 35, 79, 0, 43, 0, 15, 0, 0, 204 }, { 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0 }, { 96, 7, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEOMoon Curser", { 0, 104, -1, 141, 87, 0, 60, 0, 15, 0, 0, 220 }, { 0, 25, 0, 3, 3, 0, 0, 0, 0, 0, 0, 20 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEOPioneer", { 0, 0, -1, 4, 63, 0, 2, 0, 15, 0, 0, 139 }, { 0, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0, 3 }, { -1, 3, -1, -1, -1 }, { 0, 9, 0, 0, 0 }),
+			ClothX("MaleCEOPlayboy", { 0, 0, -1, 4, 60, 0, 36, 0, 72, 0, 0, 108 }, { 0, 0, 0, 0, 2, 0, 3, 0, 3, 0, 0, 4 }, { -1, 13, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEOPremier", { 0, 0, -1, 23, 43, 0, 57, 0, 15, 4, 0, 5 }, { 0, 0, 0, 0, 0, 0, 6, 0, 0, 1, 0, 2 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleCEOPresident", { 0, 0, -1, 6, 7, 0, 28, 0, 15, 0, 0, 75 }, { 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 10 }, { 66, 18, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
+			ClothX("MaleCEORecon Leader", { 0, 0, -1, 37, 33, 0, 27, 0, 15, 10, 0, 222 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 20 }, { 112, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
+			ClothX("MaleCEORingleader", { 0, 0, -1, 4, 78, 0, 57, 0, 0, 0, 0, 191 }, { 0, 0, 0, 0, 7, 0, 4, 0, 5, 0, 0, 0 }, { 55, 13, -1, -1, -1 }, { 19, 2, 0, 0, 0 }),
+			ClothX("MaleCEORoller", { 0, 0, -1, 0, 43, 0, 57, 51, 81, 0, 0, 170 }, { 0, 0, 0, 0, 1, 0, 6, 0, 2, 0, 0, 3 }, { -1, 18, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
+			ClothX("MaleCEOStanduot", { 0, 0, -1, 0, 82, 0, 57, 0, 15, 0, 0, 193 }, { 0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 5 }, { 96, 7, -1, -1, -1 }, { 1, 2, 0, 0, 0 }),
+			ClothX("MaleCEOSurvivalist", { 0, 0, -1, 141, 87, 0, 60, 0, 101, 0, 0, 212 }, { 0, 0, 0, 19, 6, 0, 7, 0, 6, 0, 0, 18 }, { 105, 23, -1, -1, -1 }, { 23, 9, 0, 0, 0 }),
+			ClothX("MaleCEOTop Dog", { 0, 0, -1, 0, 43, 0, 57, 15, 15, 0, 0, 193 }, { 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 22 }, { 55, 2, 32, -1, -1 }, { 1, 0, 0, 0, 0 }),
+			ClothX("MaleCEOTrailblazer", { 0, 0, -1, 4, 78, 0, 57, 123, 23, 0, 0, 191 }, { 0, 0, 0, 0, 6, 0, 9, 0, 0, 0, 0, 23 }, { 96, 7, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
+			ClothX("MaleCEOVillain", { 0, 101, -1, 33, 78, 0, 57, 0, 71, 0, 0, 203 }, { 0, 13, 0, 0, 2, 0, 10, 0, 3, 0, 0, 25 }, { 102, 13, -1, -1, -1 }, { 7, 5, 0, 0, 0 }),
+			ClothX("MaleCEOWarlord", { 0, 0, -1, 6, 59, 0, 27, 85, 5, 0, 0, 35 }, { 0, 0, 0, 0, 7, 0, 0, 0, 2, 0, 0, 1 }, { 55, 23, -1, -1, -1 }, { 1, 9, 0, 0, 0 }),
+			ClothX("MaleDesignerThe Deluxe", { 0, 0, -1, 14, 4, 0, 29, 49, 65, 0, 0, 74 }, { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 }, { 29, 18, 20, -1, -1 }, { 1, 2, 0, 0, 0 }),
+			ClothX("MaleDesignerThe Exclusive", { 0, 0, -1, 4, 4, 0, 28, 0, 15, 0, 0, 75 }, { 0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 10 }, { 6, 13, 17, -1, -1 }, { 1, 0, 2, 0, 0 }),
+			ClothX("MaleDesignerThe Flash", { 0, 0, -1, 14, 26, 0, 28, 0, 23, 0, 0, 74 }, { 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 6 }, { 7, 8, 5, -1, -1 }, { 0, 0, 2, 0, 0 }),
+			ClothX("MaleDesignerThe Grand", { 0, 0, -1, 6, 26, 0, 28, 52, 5, 0, 0, 70 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4 }, { -1, 13, 14, -1, -1 }, { 0, 2, 2, 0, 0 }),
+			ClothX("MaleDesignerThe Luxor", { 0, 0, -1, 14, 7, 0, 22, 50, 65, 0, 0, 74 }, { 0, 0, 0, 0, 4, 0, 11, 0, 3, 0, 0, 5 }, { -1, 18, 17, -1, -1 }, { 0, 2, 0, 0, 0 }),
+			ClothX("MaleDesignerThe Midas", { 0, 0, -1, 0, 37, 0, 29, 50, 15, 0, 0, 71 }, { 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 }, { 4, 18, 8, -1, -1 }, { 1, 5, 0, 0, 0 }),
+			ClothX("MaleDesignerThe Perseus", { 0, 0, -1, 0, 7, 0, 29, 0, 15, 0, 0, 73 }, { 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 5 }, { -1, 13, 14, -1, -1 }, { 0, 2, 0, 0, 0 }),
+			ClothX("MaleDesignerThe Pimp", { 0, 0, -1, 4, 26, 0, 28, 54, 10, 0, 0, 70 }, { 0, 0, 0, 0, 9, 0, 4, 0, 2, 0, 0, 1 }, { 12, 10, 14, -1, -1 }, { 4, 4, 0, 0, 0 }),
+			ClothX("MaleDesignerThe Refined", { 0, 0, -1, 50, 37, 0, 12, 0, 23, 0, 0, 72 }, { 0, 0, 0, 0, 2, 0, 3, 0, 1, 0, 0, 1 }, { 7, -1, 20, -1, -1 }, { 2, 0, 4, 0, 0 }),
+			ClothX("MaleDesignerThe Sessanta Nove", { 0, 0, -1, 6, 4, 0, 29, 49, 5, 0, 0, 74 }, { 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 3 }, { 7, 18, 11, -1, -1 }, { 2, 0, 0, 0, 0 }),
+			ClothX("MaleDesignerThe Talent", { 0, 0, -1, 1, 26, 0, 28, 53, 65, 0, 0, 62 }, { 0, 0, 0, 0, 11, 0, 3, 1, 10, 0, 0, 0 }, { 4, 7, 20, -1, -1 }, { 0, 0, 3, 0, 0 }),
+			ClothX("MaleDesignerThe Vogue", { 0, 0, -1, 6, 26, 0, 28, 55, 5, 0, 0, 72 }, { 0, 0, 0, 0, 6, 0, 5, 1, 0, 0, 0, 0 }, { -1, 10, 8, -1, -1 }, { 0, 1, 1, 0, 0 }),
+			ClothX("MaleFlashyThe Blues", { 0, 0, -1, 12, 25, 0, 10, 29, 31, 0, 0, 31 }, { 0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 0, 2 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleFlashyThe Musician", { 0, 0, -1, 6, 4, 0, 10, 0, 5, 0, 0, 4 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleFlashyThe Royal", { 0, 0, -1, 6, 26, 0, 20, 0, 5, 0, 0, 4 }, { 0, 0, 0, 0, 0, 0, 3, 0, 2, 0, 0, 14 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleFlashyThe V.I.P.", { 0, 0, -1, 12, 24, 0, 10, 27, 35, 0, 0, 30 }, { 0, 0, 0, 0, 0, 0, 0, 2, 1, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("MaleHipsterActivist", { 0, 0, -1, 8, 26, 0, 23, 0, 15, 0, 0, 38 }, { 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 1 }, { 28, 20, -1, -1, -1 }, { 5, 1, 0, 0, 0 }),
+			ClothX("MaleHipsterAficionado", { 0, 0, -1, 1, 26, 0, 22, 0, 38, 0, 0, 35 }, { 0, 0, 0, 0, 11, 0, 8, 0, 0, 0, 0, 0 }, { 28, 20, -1, -1, -1 }, { 2, 3, 0, 0, 0 }),
+			ClothX("MaleHipsterArtist", { 0, 0, -1, 11, 28, 0, 23, 0, 15, 0, 0, 43 }, { 0, 0, 0, 0, 12, 0, 4, 0, 0, 0, 0, 0 }, { 29, 20, -1, -1, -1 }, { 6, 0, 0, 0, 0 }),
+			ClothX("MaleHipsterEco", { 0, 0, -1, 11, 26, 0, 22, 11, 15, 0, 0, 42 }, { 0, 0, 0, 0, 3, 0, 7, 2, 0, 0, 0, 0 }, { 28, 20, -1, -1, -1 }, { 3, 2, 0, 0, 0 }),
+			ClothX("MaleHipsterElitist", { 0, 0, -1, 1, 26, 0, 23, 0, 43, 0, 0, 35 }, { 0, 0, 0, 0, 7, 0, 6, 0, 3, 0, 0, 3 }, { -1, 19, -1, -1, -1 }, { 0, 6, 0, 0, 0 }),
+			ClothX("MaleHipsterFitness", { 0, 0, -1, 0, 27, 0, 22, 0, 15, 0, 0, 39 }, { 0, 0, 0, 0, 5, 0, 10, 0, 0, 0, 0, 0 }, { 29, 19, -1, -1, -1 }, { 7, 2, 0, 0, 0 }),
+			ClothX("MaleHipsterIronic", { 0, 0, -1, 11, 26, 0, 23, 11, 6, 0, 0, 40 }, { 0, 0, 0, 0, 9, 0, 3, 2, 12, 0, 0, 0 }, { 29, 20, -1, -1, -1 }, { 5, 6, 0, 0, 0 }),
+			ClothX("MaleHipsterNatural", { 0, 0, -1, 1, 26, 0, 22, 0, 38, 0, 0, 35 }, { 0, 0, 0, 0, 6, 0, 0, 0, 1, 0, 0, 2 }, { 29, 19, -1, -1, -1 }, { 2, 4, 0, 0, 0 }),
+			ClothX("MaleHipsterPop Up", { 0, 0, -1, 0, 28, 0, 23, 30, 15, 0, 0, 33 }, { 0, 0, 0, 0, 2, 0, 14, 4, 0, 0, 0, 0 }, { 28, 20, -1, -1, -1 }, { 1, 5, 0, 0, 0 }),
+			ClothX("MaleHipsterUrban Hippy", { 0, 0, -1, 8, 26, 0, 22, 30, 15, 0, 0, 38 }, { 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 4 }, { 28, 20, -1, -1, -1 }, { 0, 7, 0, 0, 0 })
 		};
-		const std::vector<PZclass::ClothX> FemaleOut = {
-			PZclass::ClothX("FemaleBeachThe Bather", { 0, 0, -1, 11, 17, 0, 16, 11, 3, 0, 0, 36 }, { 0, 0, 0, 0, 7, 0, 8, 2, 0, 0, 0, 3 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBeachThe Beach Babe", { 0, 0, -1, 15, 12, 0, 3, 11, 3, 0, 0, 18 }, { 0, 0, 0, 0, 14, 0, 13, 1, 0, 0, 0, 9 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBeachThe Day Tripper", { 0, 0, -1, 5, 16, 0, 16, 10, 16, 0, 0, 31 }, { 0, 0, 0, 0, 10, 0, 7, 0, 4, 0, 0, 5 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBeachThe Lifeguard", { 0, 0, -1, 11, 17, 0, 16, 3, 3, 0, 0, 11 }, { 0, 0, 0, 0, 4, 0, 7, 1, 0, 0, 0, 10 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBeachThe Siesta", { 0, 0, -1, 15, 25, 0, 16, 1, 3, 0, 0, 18 }, { 0, 0, 0, 0, 2, 0, 9, 2, 0, 0, 0, 10 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBeachThe Sun Kissed", { 0, 0, -1, 15, 16, 0, 16, 9, 3, 0, 0, 18 }, { 0, 0, 0, 0, 8, 0, 1, 0, 0, 0, 0, 6 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBeachThe Tropical", { 0, 0, -1, 9, 16, 0, 15, 14, 3, 0, 0, 17 }, { 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBikerThe Avarus", { 0, 0, -1, 31, 78, 0, 54, 0, 86, 0, 0, 181 }, { 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0 }, { 82, 26, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBikerThe Blazer", { 0, 0, -1, 3, 73, 0, 11, 0, 72, 0, 0, 164 }, { 0, 0, 0, 0, 3, 0, 3, 0, 2, 0, 0, 3 }, { 75, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBikerThe Chimera", { 0, 0, -1, 147, 76, 0, 53, 0, 15, 0, 0, 159 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 3 }, { 82, 11, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBikerThe Faggio", { 0, 0, -1, 3, 0, 0, 13, 0, 3, 0, 15, 186 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBikerThe Hakuchou", { 0, 0, -1, 3, 11, 0, 51, 0, 3, 0, 0, 162 }, { 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 1 }, { 82, 27, -1, -1, -1 }, { 5, 7, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBikerThe Manchez", { 0, 0, -1, 4, 71, 0, 11, 0, 3, 0, 0, 171 }, { 0, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0, 1 }, { 76, 27, -1, -1, -1 }, { 6, 6, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBikerThe Nightblade", { 0, 0, -1, 133, 77, 0, 53, 0, 17, 0, 0, 175 }, { 0, 0, 0, 1, 2, 0, 0, 0, 3, 0, 0, 2 }, { -1, 11, -1, -1, -1 }, { 0, 4, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBikerThe Rat Bike", { 0, 0, -1, 24, 76, 0, 51, 0, 3, 0, 0, 173 }, { 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 }, { -1, 26, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBikerThe Wolfsbane", { 0, 0, -1, 27, 74, 0, 51, 0, 3, 0, 0, 176 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 }, { -1, 10, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBikerThe Zombie", { 0, 0, -1, 23, 0, 0, 56, 0, 77, 0, 0, 163 }, { 0, 0, 0, 0, 8, 0, 0, 0, 3, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness PantsThe Art Dealer", { 0, 0, -1, 5, 23, 0, 0, 2, 23, 0, 0, 24 }, { 0, 0, 0, 0, 1, 0, 2, 5, 3, 0, 0, 7 }, { 14, -1, -1, -1, -1 }, { 5, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness PantsThe Aviator", { 0, 0, -1, 0, 11, 0, 8, 13, 24, 0, 0, 28 }, { 0, 0, 0, 0, 2, 0, 2, 0, 2, 0, 0, 4 }, { 27, 2, -1, -1, -1 }, { 8, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness PantsThe Ball-buster", { 0, 0, -1, 5, 23, 0, 0, 0, 13, 0, 0, 24 }, { 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 2 }, { 26, 2, -1, -1, -1 }, { 3, 5, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness PantsThe Boardroom", { 0, 0, -1, 5, 6, 0, 20, 6, 23, 0, 0, 6 }, { 0, 0, 0, 0, 2, 0, 7, 4, 6, 0, 0, 2 }, { 26, 18, -1, -1, -1 }, { 2, 7, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness PantsThe Designer", { 0, 0, -1, 6, 23, 0, 19, 11, 23, 0, 0, 25 }, { 0, 0, 0, 0, 10, 0, 5, 1, 1, 0, 0, 10 }, { 27, 16, -1, -1, -1 }, { 9, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness PantsThe Director", { 0, 0, -1, 6, 6, 0, 19, 0, 0, 0, 0, 25 }, { 0, 0, 0, 0, 0, 0, 4, 0, 12, 0, 0, 1 }, { -1, 19, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness PantsThe Fashionista", { 0, 0, -1, 6, 23, 0, 6, 1, 23, 0, 0, 25 }, { 0, 0, 0, 0, 11, 0, 2, 2, 3, 0, 0, 7 }, { 26, 16, -1, -1, -1 }, { 9, 6, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness PantsThe Liberty", { 0, 0, -1, 0, 23, 0, 19, 13, 2, 0, 0, 27 }, { 0, 0, 0, 0, 4, 0, 8, 2, 0, 0, 0, 4 }, { 8, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness PantsThe Networker", { 0, 0, -1, 5, 23, 0, 19, 1, 23, 0, 0, 24 }, { 0, 0, 0, 0, 0, 0, 3, 1, 2, 0, 0, 0 }, { -1, 18, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness PantsThe Parisienne", { 0, 0, -1, 5, 23, 0, 20, 6, 0, 0, 0, 24 }, { 0, 0, 0, 0, 12, 0, 11, 0, 13, 0, 0, 9 }, { 13, -1, -1, -1, -1 }, { 1, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness SkirtsThe 9-5", { 0, 0, -1, 0, 24, 0, 19, 13, 2, 0, 0, 27 }, { 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0 }, { -1, 18, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness SkirtsThe Architect", { 0, 0, -1, 5, 24, 0, 19, 1, 13, 0, 0, 24 }, { 0, 0, 0, 0, 7, 0, 9, 1, 8, 0, 0, 3 }, { 13, 1, -1, -1, -1 }, { 1, 2, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness SkirtsThe Creative", { 0, 0, -1, 5, 24, 0, 20, 6, 23, 0, 0, 24 }, { 0, 0, 0, 0, 0, 0, 9, 1, 3, 0, 0, 10 }, { -1, 10, -1, -1, -1 }, { 0, 5, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness SkirtsThe Extrovert", { 0, 0, -1, 5, 24, 0, 20, 10, 23, 0, 0, 24 }, { 0, 0, 0, 0, 10, 0, 8, 0, 12, 0, 0, 1 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness SkirtsThe Firm", { 0, 0, -1, 6, 8, 0, 0, 11, 23, 0, 0, 7 }, { 0, 0, 0, 0, 4, 0, 0, 3, 1, 0, 0, 1 }, { 26, -1, -1, -1, -1 }, { 13, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness SkirtsThe Fresco", { 0, 0, -1, 5, 24, 0, 20, 11, 0, 0, 0, 24 }, { 0, 0, 0, 0, 5, 0, 7, 3, 15, 0, 0, 8 }, { -1, 18, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness SkirtsThe Heritage", { 0, 0, -1, 0, 12, 0, 8, 13, 24, 0, 0, 28 }, { 0, 0, 0, 0, 2, 0, 0, 5, 2, 0, 0, 3 }, { 27, 4, -1, -1, -1 }, { 10, 4, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness SkirtsThe Leopard", { 0, 0, -1, 6, 24, 0, 0, 1, 13, 0, 0, 25 }, { 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 9 }, { -1, 19, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness SkirtsThe Purrfectionist", { 0, 0, -1, 4, 24, 0, 0, 2, 2, 0, 0, 13 }, { 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 15 }, { 26, -1, -1, -1, -1 }, { 8, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleBusiness SkirtsThe Vanquish", { 0, 0, -1, 5, 8, 0, 19, 6, 23, 0, 0, 24 }, { 0, 0, 0, 0, 0, 0, 4, 1, 1, 0, 0, 6 }, { 26, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCasualThe Casual", { 0, 0, -1, 0, 16, 0, 2, 2, 3, 0, 0, 0 }, { 0, 0, 0, 0, 4, 0, 5, 1, 0, 0, 0, 11 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCasualThe Comfort", { 0, 0, -1, 2, 2, 0, 2, 5, 3, 0, 0, 2 }, { 0, 0, 0, 0, 2, 0, 0, 4, 0, 0, 0, 6 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCasualThe Daily", { 0, 0, -1, 9, 4, 0, 13, 1, 3, 0, 0, 9 }, { 0, 0, 0, 0, 9, 0, 12, 2, 0, 0, 0, 9 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCasualThe Easy", { 0, 0, -1, 3, 2, 0, 16, 2, 3, 0, 0, 3 }, { 0, 0, 0, 0, 0, 0, 6, 1, 0, 0, 0, 11 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCasualThe Homebody", { 0, 0, -1, 2, 3, 0, 16, 1, 3, 0, 0, 2 }, { 0, 0, 0, 0, 7, 0, 11, 0, 0, 0, 0, 15 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCasualThe Laid Back", { 0, 0, -1, 3, 3, 0, 16, 1, 3, 0, 0, 3 }, { 0, 0, 0, 0, 11, 0, 1, 3, 0, 0, 0, 10 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsBlack & Red", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 13 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsBlack", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsBold Abstract", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 15 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsBrown", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsCobble", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 11 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsCrosshatch", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 12, 0, 0, 0, 0, 0, 0, 12 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsGray Camo", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 8 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsGray", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsLight Woodland", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 9 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsOx Blood", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 4 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsPatterned", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 14 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsSplinter", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 10 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsTan", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 3, 0, 3, 0, 0, 0, 0, 3 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsTiger", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 16 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsWorn Brown", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 6, 0, 2, 0, 0, 0, 0, 6 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsWorn Gray", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 7 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCatsuitsYellow", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 5, 0, 4, 0, 0, 0, 0, 5 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOAlpha", { 0, 0, -1, 3, 84, 0, 30, 0, 51, 0, 0, 194 }, { 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 1 }, { -1, 11, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOAnonymous", { 0, 106, -1, 147, 90, 0, 65, 0, 15, 0, 0, 207 }, { 0, 25, 0, 0, 9, 0, 3, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOArms Dealer", { 0, 0, -1, 3, 41, 0, 29, 20, 39, 0, 0, 97 }, { 0, 0, 0, 0, 2, 0, 2, 5, 4, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOBroker", { 0, 0, -1, 7, 54, 0, 0, 22, 38, 0, 0, 139 }, { 0, 0, 0, 0, 2, 0, 1, 6, 2, 0, 0, 2 }, { 28, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOBusiness Oligarch", { 0, 0, -1, 36, 41, 0, 29, 0, 67, 0, 0, 107 }, { 0, 0, 0, 0, 2, 0, 0, 0, 4, 0, 0, 0 }, { -1, 10, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOChief", { 0, 0, -1, 3, 24, 0, 19, 0, 75, 0, 0, 134 }, { 0, 0, 0, 0, 3, 0, 9, 0, 1, 0, 0, 0 }, { -1, 14, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOClown", { 0, 95, -1, 49, 39, 0, 26, 0, 3, 0, 0, 60 }, { 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOCommander", { 0, 0, -1, 23, 95, 0, 24, 0, 14, 0, 0, 238 }, { 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 14 }, { 113, 11, -1, -1, -1 }, { 10, 1, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOCreator", { 0, 0, -1, 7, 27, 0, 11, 0, 39, 0, 0, 66 }, { 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEODemon", { 0, 94, -1, 36, 81, 0, 53, 0, 3, 0, 0, 150 }, { 0, 4, 0, 0, 0, 0, 1, 0, 0, 0, 0, 7 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEODirector", { 0, 0, -1, 7, 64, 0, 0, 0, 13, 0, 0, 137 }, { 0, 0, 0, 0, 3, 0, 0, 0, 6, 0, 0, 2 }, { -1, 18, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEODrug Baron", { 0, 0, -1, 9, 0, 0, 38, 0, 2, 0, 0, 96 }, { 0, 0, 0, 0, 10, 0, 2, 0, 0, 0, 0, 0 }, { -1, 11, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOEl Jefe", { 0, 0, -1, 3, 0, 0, 30, 0, 2, 18, 0, 103 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 1 }, { 6, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOEntrepreneur", { 0, 0, -1, 3, 43, 0, 4, 84, 65, 0, 0, 100 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 }, { 55, -1, -1, -1, -1 }, { 24, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOFat Cat", { 0, 0, -1, 3, 64, 0, 6, 23, 41, 0, 0, 58 }, { 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOFounder", { 0, 0, -1, 2, 0, 0, 10, 0, 2, 0, 0, 2 }, { 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 1 }, { -1, -1, 0, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOGeneral", { 0, 0, -1, 3, 11, 0, 30, 0, 3, 0, 0, 135 }, { 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 2 }, { 14, 0, -1, -1, -1 }, { 0, 4, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOGuerrilla", { 0, 0, -1, 174, 90, 0, 63, 0, 3, 0, 0, 231 }, { 0, 0, 0, 16, 16, 0, 3, 0, 0, 0, 0, 9 }, { 107, 11, -1, -1, -1 }, { 16, 1, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOGunrunner", { 0, 0, -1, 180, 90, 0, 65, 0, 14, 0, 0, 232 }, { 0, 0, 0, 19, 17, 0, 7, 0, 0, 0, 0, 23 }, { 106, 11, -1, -1, -1 }, { 17, 6, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOHedonist", { 0, 0, -1, 0, 57, 0, 38, 0, 3, 0, 0, 105 }, { 0, 0, 0, 0, 5, 0, 3, 0, 0, 0, 0, 5 }, { 2, 11, -1, -1, -1 }, { 1, 3, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOIcon", { 0, 0, -1, 0, 85, 0, 31, 67, 3, 0, 0, 192 }, { 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0 }, { 95, -1, 13, -1, -1 }, { 6, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOInstigator", { 0, 107, -1, 55, 92, 0, 62, 0, 2, 0, 0, 226 }, { 0, 18, 0, 0, 20, 0, 20, 0, 0, 0, 0, 11 }, { 95, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOKingpin", { 0, 0, -1, 3, 50, 0, 37, 0, 66, 0, 0, 104 }, { 0, 0, 0, 0, 0, 0, 3, 0, 5, 0, 0, 0 }, { -1, 2, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOMastermind", { 0, 0, -1, 40, 85, 0, 7, 0, 3, 0, 0, 206 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 95, 24, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOMedia Mogul", { 0, 0, -1, 7, 0, 0, 3, 85, 55, 0, 0, 66 }, { 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0 }, { 58, -1, -1, -1, -1 }, { 2, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOMob Boss", { 0, 0, -1, 3, 51, 0, 37, 0, 3, 0, 0, 102 }, { 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 }, { -1, 16, -1, -1, -1 }, { 0, 6, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOMoon Curser", { 0, 104, -1, 174, 90, 0, 63, 0, 14, 0, 0, 230 }, { 0, 25, 0, 3, 3, 0, 0, 0, 0, 0, 0, 20 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOOil Tycoon", { 0, 0, -1, 36, 37, 0, 29, 0, 39, 0, 0, 65 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOOverseas Investor", { 0, 0, -1, 3, 37, 0, 29, 22, 38, 0, 0, 7 }, { 0, 0, 0, 0, 0, 0, 0, 6, 4, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOPioneer", { 0, 0, -1, 3, 1, 0, 10, 0, 2, 0, 0, 136 }, { 0, 0, 0, 0, 8, 0, 2, 0, 0, 0, 0, 3 }, { -1, 19, -1, -1, -1 }, { 0, 9, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOPlayboy", { 0, 0, -1, 3, 63, 0, 41, 0, 76, 0, 0, 99 }, { 0, 0, 0, 0, 2, 0, 2, 0, 3, 0, 0, 2 }, { -1, 2, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOPremier", { 0, 0, -1, 31, 0, 0, 60, 0, 3, 1, 0, 73 }, { 0, 0, 0, 0, 0, 0, 6, 0, 0, 1, 0, 1 }, { -1, -1, 14, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOPresident", { 0, 0, -1, 7, 43, 0, 20, 0, 13, 0, 0, 69 }, { 0, 0, 0, 0, 4, 0, 0, 0, 6, 0, 0, 0 }, { -1, 11, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEORecon Leader", { 0, 0, -1, 41, 32, 0, 26, 0, 14, 12, 0, 232 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 20 }, { 111, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEORingleader", { 0, 0, -1, 3, 80, 0, 60, 0, 69, 0, 0, 193 }, { 0, 0, 0, 0, 7, 0, 4, 0, 2, 0, 0, 0 }, { 55, 11, -1, -1, -1 }, { 19, 2, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEORoller", { 0, 0, -1, 139, 73, 0, 60, 38, 52, 0, 0, 167 }, { 0, 0, 0, 0, 1, 0, 10, 0, 1, 0, 0, 3 }, { -1, 11, 13, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOShipping Tycoon", { 0, 0, -1, 3, 54, 0, 30, 0, 3, 0, 0, 98 }, { 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2 }, { -1, 24, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOStandout", { 0, 0, -1, 4, 84, 0, 60, 0, 3, 0, 0, 195 }, { 0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 5 }, { 95, -1, 16, -1, -1 }, { 1, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOSurvivalist", { 0, 0, -1, 174, 90, 0, 63, 0, 130, 0, 0, 216 }, { 0, 0, 0, 19, 6, 0, 7, 0, 6, 0, 0, 18 }, { 104, 25, -1, -1, -1 }, { 23, 6, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOSyndicate Leader", { 0, 0, -1, 3, 55, 0, 29, 0, 38, 0, 0, 95 }, { 0, 0, 0, 0, 0, 0, 2, 0, 10, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOTop Dog", { 0, 0, -1, 4, 83, 0, 60, 0, 3, 0, 0, 195 }, { 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 2 }, { 55, -1, 14, -1, -1 }, { 1, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOTrailblazer", { 0, 0, -1, 3, 80, 0, 60, 93, 59, 0, 0, 193 }, { 0, 0, 0, 0, 6, 0, 9, 0, 0, 0, 0, 23 }, { 95, 2, -1, -1, -1 }, { 0, 5, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOVillain", { 0, 101, -1, 23, 80, 0, 60, 0, 3, 0, 0, 205 }, { 0, 13, 0, 0, 2, 0, 10, 0, 0, 0, 0, 25 }, { 101, 3, -1, -1, -1 }, { 7, 3, 0, 0, 0 }),
-			PZclass::ClothX("FemaleCEOWarlord", { 0, 0, -1, 7, 61, 0, 26, 53, 13, 0, 0, 34 }, { 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0 }, { 55, 25, -1, -1, -1 }, { 1, 9, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Accessory", { 0, 0, -1, 14, 41, 0, 3, 37, 3, 0, 0, 68 }, { 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 3 }, { 4, 3, 12, -1, -1 }, { 0, 7, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Chic", { 0, 0, -1, 39, 43, 0, 30, 39, 45, 0, 0, 64 }, { 0, 0, 0, 0, 0, 0, 0, 1, 10, 0, 0, 3 }, { -1, 2, 3, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Class", { 0, 0, -1, 6, 43, 0, 8, 0, 45, 0, 0, 65 }, { 0, 0, 0, 0, 0, 0, 6, 0, 11, 0, 0, 5 }, { -1, 16, 4, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Elite", { 0, 0, -1, 7, 9, 0, 22, 0, 23, 0, 0, 65 }, { 0, 0, 0, 0, 7, 0, 0, 0, 1, 0, 0, 8 }, { -1, 16, 9, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Golden Girl", { 0, 0, -1, 2, 16, 0, 20, 42, 3, 0, 0, 67 }, { 0, 0, 0, 0, 8, 0, 11, 0, 0, 0, 0, 0 }, { -1, -1, 7, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Lavish", { 0, 0, -1, 6, 27, 0, 0, 0, 46, 0, 0, 66 }, { 0, 0, 0, 0, 9, 0, 2, 0, 2, 0, 0, 3 }, { -1, 4, 11, -1, -1 }, { 0, 1, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Perseus", { 0, 0, -1, 14, 43, 0, 31, 41, 3, 0, 0, 68 }, { 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 5 }, { -1, 11, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Puma", { 0, 0, -1, 6, 43, 0, 30, 29, 15, 0, 0, 66 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, 7, 4, -1, -1 }, { 0, 1, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Shine", { 0, 0, -1, 6, 9, 0, 31, 0, 49, 0, 0, 64 }, { 0, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 0 }, { 13, 11, 5, -1, -1 }, { 0, 2, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Socialite", { 0, 0, -1, 3, 43, 0, 19, 0, 50, 0, 0, 65 }, { 0, 0, 0, 0, 2, 0, 2, 0, 2, 0, 0, 0 }, { -1, 7, 6, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Status", { 0, 0, -1, 7, 26, 0, 19, 33, 13, 0, 0, 66 }, { 0, 0, 0, 0, 0, 0, 2, 0, 15, 0, 0, 2 }, { 22, 16, 11, -1, -1 }, { 1, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleDesignerThe Wealth", { 0, 0, -1, 3, 43, 0, 30, 41, 45, 0, 0, 64 }, { 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0 }, { -1, 2, 8, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleHipsterThe 90s", { 0, 0, -1, 5, 27, 0, 22, 14, 28, 0, 0, 35 }, { 0, 0, 0, 0, 13, 0, 3, 2, 8, 0, 0, 1 }, { -1, 20, -1, -1, -1 }, { 0, 7, 0, 0, 0 }),
-			PZclass::ClothX("FemaleHipsterThe Bubblegum", { 0, 0, -1, 5, 27, 0, 22, 14, 28, 0, 0, 35 }, { 0, 0, 0, 0, 11, 0, 4, 3, 6, 0, 0, 3 }, { -1, 21, -1, -1, -1 }, { 0, 6, 0, 0, 0 }),
-			PZclass::ClothX("FemaleHipsterThe Craze", { 0, 0, -1, 5, 27, 0, 22, 14, 28, 0, 0, 31 }, { 0, 0, 0, 0, 12, 0, 5, 2, 7, 0, 0, 2 }, { 29, 20, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
-			PZclass::ClothX("FemaleHipsterThe Jungle", { 0, 0, -1, 6, 27, 0, 3, 0, 28, 0, 0, 34 }, { 0, 0, 0, 0, 2, 0, 10, 0, 3, 0, 0, 0 }, { -1, 21, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
-			PZclass::ClothX("FemaleHipsterThe Palms", { 0, 0, -1, 5, 27, 0, 22, 14, 26, 0, 0, 31 }, { 0, 0, 0, 0, 10, 0, 10, 2, 1, 0, 0, 3 }, { 29, 21, -1, -1, -1 }, { 2, 7, 0, 0, 0 }),
-			PZclass::ClothX("FemaleHipsterThe Roar", { 0, 0, -1, 4, 27, 0, 22, 11, 2, 0, 0, 33 }, { 0, 0, 0, 0, 8, 0, 7, 0, 0, 0, 0, 2 }, { -1, 21, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleHipsterThe Safari", { 0, 0, -1, 5, 25, 0, 21, 14, 4, 0, 0, 35 }, { 0, 0, 0, 0, 4, 0, 9, 0, 14, 0, 0, 9 }, { 28, 20, -1, -1, -1 }, { 1, 0, 0, 0, 0 }),
-			PZclass::ClothX("FemaleHipsterThe Tropics", { 0, 0, -1, 4, 25, 0, 3, 15, 2, 0, 0, 33 }, { 0, 0, 0, 0, 12, 0, 13, 0, 0, 0, 0, 4 }, { -1, 20, -1, -1, -1 }, { 0, 4, 0, 0, 0 }),
-			PZclass::ClothX("FemaleHipsterThe Vintage", { 0, 0, -1, 15, 21, 0, 22, 14, 2, 0, 0, 37 }, { 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 4 }, { -1, 20, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
-			PZclass::ClothX("FemaleHipsterThe Youth", { 0, 0, -1, 4, 27, 0, 11, 14, 2, 0, 0, 33 }, { 0, 0, 0, 0, 7, 0, 3, 1, 0, 0, 0, 5 }, { 29, 21, -1, -1, -1 }, { 3, 1, 0, 0, 0 }),
-			PZclass::ClothX("FemaleHipsterThe Yuppie", { 0, 0, -1, 5, 27, 0, 22, 14, 28, 0, 0, 31 }, { 0, 0, 0, 0, 6, 0, 5, 0, 0, 0, 0, 6 }, { 28, 20, -1, -1, -1 }, { 4, 1, 0, 0, 0 })
+		std::vector<ClothX> FemaleOut = {
+			ClothX("FemaleBeachThe Bather", { 0, 0, -1, 11, 17, 0, 16, 11, 3, 0, 0, 36 }, { 0, 0, 0, 0, 7, 0, 8, 2, 0, 0, 0, 3 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBeachThe Beach Babe", { 0, 0, -1, 15, 12, 0, 3, 11, 3, 0, 0, 18 }, { 0, 0, 0, 0, 14, 0, 13, 1, 0, 0, 0, 9 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBeachThe Day Tripper", { 0, 0, -1, 5, 16, 0, 16, 10, 16, 0, 0, 31 }, { 0, 0, 0, 0, 10, 0, 7, 0, 4, 0, 0, 5 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBeachThe Lifeguard", { 0, 0, -1, 11, 17, 0, 16, 3, 3, 0, 0, 11 }, { 0, 0, 0, 0, 4, 0, 7, 1, 0, 0, 0, 10 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBeachThe Siesta", { 0, 0, -1, 15, 25, 0, 16, 1, 3, 0, 0, 18 }, { 0, 0, 0, 0, 2, 0, 9, 2, 0, 0, 0, 10 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBeachThe Sun Kissed", { 0, 0, -1, 15, 16, 0, 16, 9, 3, 0, 0, 18 }, { 0, 0, 0, 0, 8, 0, 1, 0, 0, 0, 0, 6 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBeachThe Tropical", { 0, 0, -1, 9, 16, 0, 15, 14, 3, 0, 0, 17 }, { 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBikerThe Avarus", { 0, 0, -1, 31, 78, 0, 54, 0, 86, 0, 0, 181 }, { 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0 }, { 82, 26, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
+			ClothX("FemaleBikerThe Blazer", { 0, 0, -1, 3, 73, 0, 11, 0, 72, 0, 0, 164 }, { 0, 0, 0, 0, 3, 0, 3, 0, 2, 0, 0, 3 }, { 75, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
+			ClothX("FemaleBikerThe Chimera", { 0, 0, -1, 147, 76, 0, 53, 0, 15, 0, 0, 159 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 3 }, { 82, 11, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
+			ClothX("FemaleBikerThe Faggio", { 0, 0, -1, 3, 0, 0, 13, 0, 3, 0, 15, 186 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBikerThe Hakuchou", { 0, 0, -1, 3, 11, 0, 51, 0, 3, 0, 0, 162 }, { 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 1 }, { 82, 27, -1, -1, -1 }, { 5, 7, 0, 0, 0 }),
+			ClothX("FemaleBikerThe Manchez", { 0, 0, -1, 4, 71, 0, 11, 0, 3, 0, 0, 171 }, { 0, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0, 1 }, { 76, 27, -1, -1, -1 }, { 6, 6, 0, 0, 0 }),
+			ClothX("FemaleBikerThe Nightblade", { 0, 0, -1, 133, 77, 0, 53, 0, 17, 0, 0, 175 }, { 0, 0, 0, 1, 2, 0, 0, 0, 3, 0, 0, 2 }, { -1, 11, -1, -1, -1 }, { 0, 4, 0, 0, 0 }),
+			ClothX("FemaleBikerThe Rat Bike", { 0, 0, -1, 24, 76, 0, 51, 0, 3, 0, 0, 173 }, { 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 }, { -1, 26, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBikerThe Wolfsbane", { 0, 0, -1, 27, 74, 0, 51, 0, 3, 0, 0, 176 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 }, { -1, 10, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
+			ClothX("FemaleBikerThe Zombie", { 0, 0, -1, 23, 0, 0, 56, 0, 77, 0, 0, 163 }, { 0, 0, 0, 0, 8, 0, 0, 0, 3, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBusiness PantsThe Art Dealer", { 0, 0, -1, 5, 23, 0, 0, 2, 23, 0, 0, 24 }, { 0, 0, 0, 0, 1, 0, 2, 5, 3, 0, 0, 7 }, { 14, -1, -1, -1, -1 }, { 5, 0, 0, 0, 0 }),
+			ClothX("FemaleBusiness PantsThe Aviator", { 0, 0, -1, 0, 11, 0, 8, 13, 24, 0, 0, 28 }, { 0, 0, 0, 0, 2, 0, 2, 0, 2, 0, 0, 4 }, { 27, 2, -1, -1, -1 }, { 8, 0, 0, 0, 0 }),
+			ClothX("FemaleBusiness PantsThe Ball-buster", { 0, 0, -1, 5, 23, 0, 0, 0, 13, 0, 0, 24 }, { 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 2 }, { 26, 2, -1, -1, -1 }, { 3, 5, 0, 0, 0 }),
+			ClothX("FemaleBusiness PantsThe Boardroom", { 0, 0, -1, 5, 6, 0, 20, 6, 23, 0, 0, 6 }, { 0, 0, 0, 0, 2, 0, 7, 4, 6, 0, 0, 2 }, { 26, 18, -1, -1, -1 }, { 2, 7, 0, 0, 0 }),
+			ClothX("FemaleBusiness PantsThe Designer", { 0, 0, -1, 6, 23, 0, 19, 11, 23, 0, 0, 25 }, { 0, 0, 0, 0, 10, 0, 5, 1, 1, 0, 0, 10 }, { 27, 16, -1, -1, -1 }, { 9, 0, 0, 0, 0 }),
+			ClothX("FemaleBusiness PantsThe Director", { 0, 0, -1, 6, 6, 0, 19, 0, 0, 0, 0, 25 }, { 0, 0, 0, 0, 0, 0, 4, 0, 12, 0, 0, 1 }, { -1, 19, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
+			ClothX("FemaleBusiness PantsThe Fashionista", { 0, 0, -1, 6, 23, 0, 6, 1, 23, 0, 0, 25 }, { 0, 0, 0, 0, 11, 0, 2, 2, 3, 0, 0, 7 }, { 26, 16, -1, -1, -1 }, { 9, 6, 0, 0, 0 }),
+			ClothX("FemaleBusiness PantsThe Liberty", { 0, 0, -1, 0, 23, 0, 19, 13, 2, 0, 0, 27 }, { 0, 0, 0, 0, 4, 0, 8, 2, 0, 0, 0, 4 }, { 8, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
+			ClothX("FemaleBusiness PantsThe Networker", { 0, 0, -1, 5, 23, 0, 19, 1, 23, 0, 0, 24 }, { 0, 0, 0, 0, 0, 0, 3, 1, 2, 0, 0, 0 }, { -1, 18, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
+			ClothX("FemaleBusiness PantsThe Parisienne", { 0, 0, -1, 5, 23, 0, 20, 6, 0, 0, 0, 24 }, { 0, 0, 0, 0, 12, 0, 11, 0, 13, 0, 0, 9 }, { 13, -1, -1, -1, -1 }, { 1, 0, 0, 0, 0 }),
+			ClothX("FemaleBusiness SkirtsThe 9-5", { 0, 0, -1, 0, 24, 0, 19, 13, 2, 0, 0, 27 }, { 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0 }, { -1, 18, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
+			ClothX("FemaleBusiness SkirtsThe Architect", { 0, 0, -1, 5, 24, 0, 19, 1, 13, 0, 0, 24 }, { 0, 0, 0, 0, 7, 0, 9, 1, 8, 0, 0, 3 }, { 13, 1, -1, -1, -1 }, { 1, 2, 0, 0, 0 }),
+			ClothX("FemaleBusiness SkirtsThe Creative", { 0, 0, -1, 5, 24, 0, 20, 6, 23, 0, 0, 24 }, { 0, 0, 0, 0, 0, 0, 9, 1, 3, 0, 0, 10 }, { -1, 10, -1, -1, -1 }, { 0, 5, 0, 0, 0 }),
+			ClothX("FemaleBusiness SkirtsThe Extrovert", { 0, 0, -1, 5, 24, 0, 20, 10, 23, 0, 0, 24 }, { 0, 0, 0, 0, 10, 0, 8, 0, 12, 0, 0, 1 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBusiness SkirtsThe Firm", { 0, 0, -1, 6, 8, 0, 0, 11, 23, 0, 0, 7 }, { 0, 0, 0, 0, 4, 0, 0, 3, 1, 0, 0, 1 }, { 26, -1, -1, -1, -1 }, { 13, 0, 0, 0, 0 }),
+			ClothX("FemaleBusiness SkirtsThe Fresco", { 0, 0, -1, 5, 24, 0, 20, 11, 0, 0, 0, 24 }, { 0, 0, 0, 0, 5, 0, 7, 3, 15, 0, 0, 8 }, { -1, 18, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBusiness SkirtsThe Heritage", { 0, 0, -1, 0, 12, 0, 8, 13, 24, 0, 0, 28 }, { 0, 0, 0, 0, 2, 0, 0, 5, 2, 0, 0, 3 }, { 27, 4, -1, -1, -1 }, { 10, 4, 0, 0, 0 }),
+			ClothX("FemaleBusiness SkirtsThe Leopard", { 0, 0, -1, 6, 24, 0, 0, 1, 13, 0, 0, 25 }, { 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 9 }, { -1, 19, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleBusiness SkirtsThe Purrfectionist", { 0, 0, -1, 4, 24, 0, 0, 2, 2, 0, 0, 13 }, { 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 15 }, { 26, -1, -1, -1, -1 }, { 8, 0, 0, 0, 0 }),
+			ClothX("FemaleBusiness SkirtsThe Vanquish", { 0, 0, -1, 5, 8, 0, 19, 6, 23, 0, 0, 24 }, { 0, 0, 0, 0, 0, 0, 4, 1, 1, 0, 0, 6 }, { 26, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCasualThe Casual", { 0, 0, -1, 0, 16, 0, 2, 2, 3, 0, 0, 0 }, { 0, 0, 0, 0, 4, 0, 5, 1, 0, 0, 0, 11 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCasualThe Comfort", { 0, 0, -1, 2, 2, 0, 2, 5, 3, 0, 0, 2 }, { 0, 0, 0, 0, 2, 0, 0, 4, 0, 0, 0, 6 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCasualThe Daily", { 0, 0, -1, 9, 4, 0, 13, 1, 3, 0, 0, 9 }, { 0, 0, 0, 0, 9, 0, 12, 2, 0, 0, 0, 9 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCasualThe Easy", { 0, 0, -1, 3, 2, 0, 16, 2, 3, 0, 0, 3 }, { 0, 0, 0, 0, 0, 0, 6, 1, 0, 0, 0, 11 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCasualThe Homebody", { 0, 0, -1, 2, 3, 0, 16, 1, 3, 0, 0, 2 }, { 0, 0, 0, 0, 7, 0, 11, 0, 0, 0, 0, 15 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCasualThe Laid Back", { 0, 0, -1, 3, 3, 0, 16, 1, 3, 0, 0, 3 }, { 0, 0, 0, 0, 11, 0, 1, 3, 0, 0, 0, 10 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsBlack & Red", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 13 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsBlack", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsBold Abstract", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 15 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsBrown", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 2, 0, 2, 0, 0, 0, 0, 2 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsCobble", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 11 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsCrosshatch", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 12, 0, 0, 0, 0, 0, 0, 12 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsGray Camo", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 8 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsGray", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsLight Woodland", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 9 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsOx Blood", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 4 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsPatterned", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 14 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsSplinter", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 10 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsTan", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 3, 0, 3, 0, 0, 0, 0, 3 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsTiger", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 16 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsWorn Brown", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 6, 0, 2, 0, 0, 0, 0, 6 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsWorn Gray", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 7 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCatsuitsYellow", { 21, 0, 0, 7, 102, 0, 77, 0, 14, 0, 0, 262 }, { 0, 0, 0, 0, 5, 0, 4, 0, 0, 0, 0, 5 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOAlpha", { 0, 0, -1, 3, 84, 0, 30, 0, 51, 0, 0, 194 }, { 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 1 }, { -1, 11, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
+			ClothX("FemaleCEOAnonymous", { 0, 106, -1, 147, 90, 0, 65, 0, 15, 0, 0, 207 }, { 0, 25, 0, 0, 9, 0, 3, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOArms Dealer", { 0, 0, -1, 3, 41, 0, 29, 20, 39, 0, 0, 97 }, { 0, 0, 0, 0, 2, 0, 2, 5, 4, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOBroker", { 0, 0, -1, 7, 54, 0, 0, 22, 38, 0, 0, 139 }, { 0, 0, 0, 0, 2, 0, 1, 6, 2, 0, 0, 2 }, { 28, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOBusiness Oligarch", { 0, 0, -1, 36, 41, 0, 29, 0, 67, 0, 0, 107 }, { 0, 0, 0, 0, 2, 0, 0, 0, 4, 0, 0, 0 }, { -1, 10, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
+			ClothX("FemaleCEOChief", { 0, 0, -1, 3, 24, 0, 19, 0, 75, 0, 0, 134 }, { 0, 0, 0, 0, 3, 0, 9, 0, 1, 0, 0, 0 }, { -1, 14, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOClown", { 0, 95, -1, 49, 39, 0, 26, 0, 3, 0, 0, 60 }, { 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOCommander", { 0, 0, -1, 23, 95, 0, 24, 0, 14, 0, 0, 238 }, { 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 14 }, { 113, 11, -1, -1, -1 }, { 10, 1, 0, 0, 0 }),
+			ClothX("FemaleCEOCreator", { 0, 0, -1, 7, 27, 0, 11, 0, 39, 0, 0, 66 }, { 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEODemon", { 0, 94, -1, 36, 81, 0, 53, 0, 3, 0, 0, 150 }, { 0, 4, 0, 0, 0, 0, 1, 0, 0, 0, 0, 7 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEODirector", { 0, 0, -1, 7, 64, 0, 0, 0, 13, 0, 0, 137 }, { 0, 0, 0, 0, 3, 0, 0, 0, 6, 0, 0, 2 }, { -1, 18, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEODrug Baron", { 0, 0, -1, 9, 0, 0, 38, 0, 2, 0, 0, 96 }, { 0, 0, 0, 0, 10, 0, 2, 0, 0, 0, 0, 0 }, { -1, 11, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
+			ClothX("FemaleCEOEl Jefe", { 0, 0, -1, 3, 0, 0, 30, 0, 2, 18, 0, 103 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 1 }, { 6, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOEntrepreneur", { 0, 0, -1, 3, 43, 0, 4, 84, 65, 0, 0, 100 }, { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 }, { 55, -1, -1, -1, -1 }, { 24, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOFat Cat", { 0, 0, -1, 3, 64, 0, 6, 23, 41, 0, 0, 58 }, { 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOFounder", { 0, 0, -1, 2, 0, 0, 10, 0, 2, 0, 0, 2 }, { 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 1 }, { -1, -1, 0, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOGeneral", { 0, 0, -1, 3, 11, 0, 30, 0, 3, 0, 0, 135 }, { 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 2 }, { 14, 0, -1, -1, -1 }, { 0, 4, 0, 0, 0 }),
+			ClothX("FemaleCEOGuerrilla", { 0, 0, -1, 174, 90, 0, 63, 0, 3, 0, 0, 231 }, { 0, 0, 0, 16, 16, 0, 3, 0, 0, 0, 0, 9 }, { 107, 11, -1, -1, -1 }, { 16, 1, 0, 0, 0 }),
+			ClothX("FemaleCEOGunrunner", { 0, 0, -1, 180, 90, 0, 65, 0, 14, 0, 0, 232 }, { 0, 0, 0, 19, 17, 0, 7, 0, 0, 0, 0, 23 }, { 106, 11, -1, -1, -1 }, { 17, 6, 0, 0, 0 }),
+			ClothX("FemaleCEOHedonist", { 0, 0, -1, 0, 57, 0, 38, 0, 3, 0, 0, 105 }, { 0, 0, 0, 0, 5, 0, 3, 0, 0, 0, 0, 5 }, { 2, 11, -1, -1, -1 }, { 1, 3, 0, 0, 0 }),
+			ClothX("FemaleCEOIcon", { 0, 0, -1, 0, 85, 0, 31, 67, 3, 0, 0, 192 }, { 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0 }, { 95, -1, 13, -1, -1 }, { 6, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOInstigator", { 0, 107, -1, 55, 92, 0, 62, 0, 2, 0, 0, 226 }, { 0, 18, 0, 0, 20, 0, 20, 0, 0, 0, 0, 11 }, { 95, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOKingpin", { 0, 0, -1, 3, 50, 0, 37, 0, 66, 0, 0, 104 }, { 0, 0, 0, 0, 0, 0, 3, 0, 5, 0, 0, 0 }, { -1, 2, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOMastermind", { 0, 0, -1, 40, 85, 0, 7, 0, 3, 0, 0, 206 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 95, 24, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOMedia Mogul", { 0, 0, -1, 7, 0, 0, 3, 85, 55, 0, 0, 66 }, { 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0 }, { 58, -1, -1, -1, -1 }, { 2, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOMob Boss", { 0, 0, -1, 3, 51, 0, 37, 0, 3, 0, 0, 102 }, { 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 }, { -1, 16, -1, -1, -1 }, { 0, 6, 0, 0, 0 }),
+			ClothX("FemaleCEOMoon Curser", { 0, 104, -1, 174, 90, 0, 63, 0, 14, 0, 0, 230 }, { 0, 25, 0, 3, 3, 0, 0, 0, 0, 0, 0, 20 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOOil Tycoon", { 0, 0, -1, 36, 37, 0, 29, 0, 39, 0, 0, 65 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOOverseas Investor", { 0, 0, -1, 3, 37, 0, 29, 22, 38, 0, 0, 7 }, { 0, 0, 0, 0, 0, 0, 0, 6, 4, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOPioneer", { 0, 0, -1, 3, 1, 0, 10, 0, 2, 0, 0, 136 }, { 0, 0, 0, 0, 8, 0, 2, 0, 0, 0, 0, 3 }, { -1, 19, -1, -1, -1 }, { 0, 9, 0, 0, 0 }),
+			ClothX("FemaleCEOPlayboy", { 0, 0, -1, 3, 63, 0, 41, 0, 76, 0, 0, 99 }, { 0, 0, 0, 0, 2, 0, 2, 0, 3, 0, 0, 2 }, { -1, 2, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOPremier", { 0, 0, -1, 31, 0, 0, 60, 0, 3, 1, 0, 73 }, { 0, 0, 0, 0, 0, 0, 6, 0, 0, 1, 0, 1 }, { -1, -1, 14, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOPresident", { 0, 0, -1, 7, 43, 0, 20, 0, 13, 0, 0, 69 }, { 0, 0, 0, 0, 4, 0, 0, 0, 6, 0, 0, 0 }, { -1, 11, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
+			ClothX("FemaleCEORecon Leader", { 0, 0, -1, 41, 32, 0, 26, 0, 14, 12, 0, 232 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 20 }, { 111, -1, -1, -1, -1 }, { 4, 0, 0, 0, 0 }),
+			ClothX("FemaleCEORingleader", { 0, 0, -1, 3, 80, 0, 60, 0, 69, 0, 0, 193 }, { 0, 0, 0, 0, 7, 0, 4, 0, 2, 0, 0, 0 }, { 55, 11, -1, -1, -1 }, { 19, 2, 0, 0, 0 }),
+			ClothX("FemaleCEORoller", { 0, 0, -1, 139, 73, 0, 60, 38, 52, 0, 0, 167 }, { 0, 0, 0, 0, 1, 0, 10, 0, 1, 0, 0, 3 }, { -1, 11, 13, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOShipping Tycoon", { 0, 0, -1, 3, 54, 0, 30, 0, 3, 0, 0, 98 }, { 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 2 }, { -1, 24, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOStandout", { 0, 0, -1, 4, 84, 0, 60, 0, 3, 0, 0, 195 }, { 0, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 5 }, { 95, -1, 16, -1, -1 }, { 1, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOSurvivalist", { 0, 0, -1, 174, 90, 0, 63, 0, 130, 0, 0, 216 }, { 0, 0, 0, 19, 6, 0, 7, 0, 6, 0, 0, 18 }, { 104, 25, -1, -1, -1 }, { 23, 6, 0, 0, 0 }),
+			ClothX("FemaleCEOSyndicate Leader", { 0, 0, -1, 3, 55, 0, 29, 0, 38, 0, 0, 95 }, { 0, 0, 0, 0, 0, 0, 2, 0, 10, 0, 0, 0 }, { -1, -1, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOTop Dog", { 0, 0, -1, 4, 83, 0, 60, 0, 3, 0, 0, 195 }, { 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 2 }, { 55, -1, 14, -1, -1 }, { 1, 0, 0, 0, 0 }),
+			ClothX("FemaleCEOTrailblazer", { 0, 0, -1, 3, 80, 0, 60, 93, 59, 0, 0, 193 }, { 0, 0, 0, 0, 6, 0, 9, 0, 0, 0, 0, 23 }, { 95, 2, -1, -1, -1 }, { 0, 5, 0, 0, 0 }),
+			ClothX("FemaleCEOVillain", { 0, 101, -1, 23, 80, 0, 60, 0, 3, 0, 0, 205 }, { 0, 13, 0, 0, 2, 0, 10, 0, 0, 0, 0, 25 }, { 101, 3, -1, -1, -1 }, { 7, 3, 0, 0, 0 }),
+			ClothX("FemaleCEOWarlord", { 0, 0, -1, 7, 61, 0, 26, 53, 13, 0, 0, 34 }, { 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0 }, { 55, 25, -1, -1, -1 }, { 1, 9, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Accessory", { 0, 0, -1, 14, 41, 0, 3, 37, 3, 0, 0, 68 }, { 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 3 }, { 4, 3, 12, -1, -1 }, { 0, 7, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Chic", { 0, 0, -1, 39, 43, 0, 30, 39, 45, 0, 0, 64 }, { 0, 0, 0, 0, 0, 0, 0, 1, 10, 0, 0, 3 }, { -1, 2, 3, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Class", { 0, 0, -1, 6, 43, 0, 8, 0, 45, 0, 0, 65 }, { 0, 0, 0, 0, 0, 0, 6, 0, 11, 0, 0, 5 }, { -1, 16, 4, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Elite", { 0, 0, -1, 7, 9, 0, 22, 0, 23, 0, 0, 65 }, { 0, 0, 0, 0, 7, 0, 0, 0, 1, 0, 0, 8 }, { -1, 16, 9, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Golden Girl", { 0, 0, -1, 2, 16, 0, 20, 42, 3, 0, 0, 67 }, { 0, 0, 0, 0, 8, 0, 11, 0, 0, 0, 0, 0 }, { -1, -1, 7, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Lavish", { 0, 0, -1, 6, 27, 0, 0, 0, 46, 0, 0, 66 }, { 0, 0, 0, 0, 9, 0, 2, 0, 2, 0, 0, 3 }, { -1, 4, 11, -1, -1 }, { 0, 1, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Perseus", { 0, 0, -1, 14, 43, 0, 31, 41, 3, 0, 0, 68 }, { 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 5 }, { -1, 11, -1, -1, -1 }, { 0, 2, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Puma", { 0, 0, -1, 6, 43, 0, 30, 29, 15, 0, 0, 66 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { -1, 7, 4, -1, -1 }, { 0, 1, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Shine", { 0, 0, -1, 6, 9, 0, 31, 0, 49, 0, 0, 64 }, { 0, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 0 }, { 13, 11, 5, -1, -1 }, { 0, 2, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Socialite", { 0, 0, -1, 3, 43, 0, 19, 0, 50, 0, 0, 65 }, { 0, 0, 0, 0, 2, 0, 2, 0, 2, 0, 0, 0 }, { -1, 7, 6, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Status", { 0, 0, -1, 7, 26, 0, 19, 33, 13, 0, 0, 66 }, { 0, 0, 0, 0, 0, 0, 2, 0, 15, 0, 0, 2 }, { 22, 16, 11, -1, -1 }, { 1, 0, 0, 0, 0 }),
+			ClothX("FemaleDesignerThe Wealth", { 0, 0, -1, 3, 43, 0, 30, 41, 45, 0, 0, 64 }, { 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0 }, { -1, 2, 8, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleHipsterThe 90s", { 0, 0, -1, 5, 27, 0, 22, 14, 28, 0, 0, 35 }, { 0, 0, 0, 0, 13, 0, 3, 2, 8, 0, 0, 1 }, { -1, 20, -1, -1, -1 }, { 0, 7, 0, 0, 0 }),
+			ClothX("FemaleHipsterThe Bubblegum", { 0, 0, -1, 5, 27, 0, 22, 14, 28, 0, 0, 35 }, { 0, 0, 0, 0, 11, 0, 4, 3, 6, 0, 0, 3 }, { -1, 21, -1, -1, -1 }, { 0, 6, 0, 0, 0 }),
+			ClothX("FemaleHipsterThe Craze", { 0, 0, -1, 5, 27, 0, 22, 14, 28, 0, 0, 31 }, { 0, 0, 0, 0, 12, 0, 5, 2, 7, 0, 0, 2 }, { 29, 20, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
+			ClothX("FemaleHipsterThe Jungle", { 0, 0, -1, 6, 27, 0, 3, 0, 28, 0, 0, 34 }, { 0, 0, 0, 0, 2, 0, 10, 0, 3, 0, 0, 0 }, { -1, 21, -1, -1, -1 }, { 0, 3, 0, 0, 0 }),
+			ClothX("FemaleHipsterThe Palms", { 0, 0, -1, 5, 27, 0, 22, 14, 26, 0, 0, 31 }, { 0, 0, 0, 0, 10, 0, 10, 2, 1, 0, 0, 3 }, { 29, 21, -1, -1, -1 }, { 2, 7, 0, 0, 0 }),
+			ClothX("FemaleHipsterThe Roar", { 0, 0, -1, 4, 27, 0, 22, 11, 2, 0, 0, 33 }, { 0, 0, 0, 0, 8, 0, 7, 0, 0, 0, 0, 2 }, { -1, 21, -1, -1, -1 }, { 0, 0, 0, 0, 0 }),
+			ClothX("FemaleHipsterThe Safari", { 0, 0, -1, 5, 25, 0, 21, 14, 4, 0, 0, 35 }, { 0, 0, 0, 0, 4, 0, 9, 0, 14, 0, 0, 9 }, { 28, 20, -1, -1, -1 }, { 1, 0, 0, 0, 0 }),
+			ClothX("FemaleHipsterThe Tropics", { 0, 0, -1, 4, 25, 0, 3, 15, 2, 0, 0, 33 }, { 0, 0, 0, 0, 12, 0, 13, 0, 0, 0, 0, 4 }, { -1, 20, -1, -1, -1 }, { 0, 4, 0, 0, 0 }),
+			ClothX("FemaleHipsterThe Vintage", { 0, 0, -1, 15, 21, 0, 22, 14, 2, 0, 0, 37 }, { 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 4 }, { -1, 20, -1, -1, -1 }, { 0, 1, 0, 0, 0 }),
+			ClothX("FemaleHipsterThe Youth", { 0, 0, -1, 4, 27, 0, 11, 14, 2, 0, 0, 33 }, { 0, 0, 0, 0, 7, 0, 3, 1, 0, 0, 0, 5 }, { 29, 21, -1, -1, -1 }, { 3, 1, 0, 0, 0 }),
+			ClothX("FemaleHipsterThe Yuppie", { 0, 0, -1, 5, 27, 0, 22, 14, 28, 0, 0, 31 }, { 0, 0, 0, 0, 6, 0, 5, 0, 0, 0, 0, 6 }, { 28, 20, -1, -1, -1 }, { 4, 1, 0, 0, 0 })
 		};
 
-		string OutputFolder = GetDir() + "/Outfits";
-		string OutputFolderM = GetDir() + "/Outfits/Male";
-		string OutputFolderF = GetDir() + "/Outfits/Female";
-		if (CreateDirectoryA((LPSTR)OutputFolder.c_str(), NULL) || ERROR_ALREADY_EXISTS == GetLastError())
+		std::vector<std::string> MaFiles = ReadDirectory(DirectOutfitMale);
+		std::vector<std::string> FeFiles = ReadDirectory(DirectOutfitFemale);
+
+		if (MaFiles.size() == 0)
 		{
 			WriteFile(HasOutfits, ReadMe);
-			if (CreateDirectoryA((LPSTR)OutputFolderM.c_str(), NULL) || ERROR_ALREADY_EXISTS == GetLastError())
-			{
-				for (int i = 0; i < (int)MaleOut.size(); i++)
-					SaveOutfits(MaleOut[i], true);
-			}
-
-			if (CreateDirectoryA((LPSTR)OutputFolderF.c_str(), NULL) || ERROR_ALREADY_EXISTS == GetLastError())
-			{
-				for (int i = 0; i < (int)FemaleOut.size(); i++)
-					SaveOutfits(FemaleOut[i], false);
-			}
+			for (int i = 0; i < (int)MaleOut.size(); i++)
+				SaveOutfits(MaleOut[i], DirectOutfitMale);
 		}
+
+		if (FeFiles.size() == 0)
+		{
+			WriteFile(HasOutfits, ReadMe);
+			for (int i = 0; i < (int)MaleOut.size(); i++)
+				SaveOutfits(MaleOut[i], DirectOutfitFemale);
+		}
+	}
+	
+	int PlayerZinSesh()
+	{
+		return (int)PedList.size() + (int)AFKList.size();
+	}
+	bool WHileKeyDown(int key)
+	{
+		bool Output = false;
+		while (IsKeyDown(KeyFind[key]))
+		{
+			if (!Output)
+				Output = true;
+			WAIT(1);
+		}
+		return Output;
 	}
 	void DisplayPlayers()
 	{
-		//const float lineWidth = 250.0;
 		CAM::DO_SCREEN_FADE_IN(1);
 
-		vector<string> PlayerZList1 = {};
-		vector<string> PlayerZList2 = {};
+		std::vector<std::string> PlayerZList1 = {};
+		std::vector<std::string> PlayerZList2 = {};
 
-		vector<string> PlayerZLevel1 = {};
-		vector<string> PlayerZLevel2 = {};
+		std::vector<std::string> PlayerZLevel1 = {};
+		std::vector<std::string> PlayerZLevel2 = {};
 
-		int Playerz = (int)PedList.size() + (int)AFKList.size();
-		std::string Public = PZLang[87];
+		int Playerz = PlayerZinSesh();
+		std::string Public = PZTranslate[4];
 		if (PZData::MySettings.InviteOnly)
-			Public = PZLang[88];
-		std::string caption = "GTA Online (" + Public + ", " + std::to_string(Playerz) + ")";
+			Public = PZTranslate[5];
+		std::string Caption = "GTA Online (" + Public + ", " + std::to_string(Playerz) + ")";
 
 		for (int i = 0; i < PedList.size(); i++)
 		{
@@ -2681,12 +1913,10 @@ namespace PZSys
 			}
 		}
 
-		int iWait = InGameTime() + 7000;
+		int WaitFor = InGameTime() + 7000;
 
-		vector<string> sInstBut = { PZLang[86] };
-		vector<int> iInstBut = { PZData::MySettings.Control_Open };
-
-		int iBc = BottomRight(iInstBut, sInstBut);
+		std::vector<std::string> sInstBut = { PZTranslate[4] };
+		std::vector<int> iInstBut = { PZData::MySettings.Control_Keys_Players_List };
 
 		float lineWidthA = 252.0;
 		float lineHeightA = 5.0;
@@ -2710,7 +1940,7 @@ namespace PZSys
 			DWORD maxTickCount = GetTickCount() + waitTime;
 			do
 			{
-				DrawSessionList(caption, "", lineWidthA, lineHeightA, lineTopA, lineLeftA, textLeftA, textLeftA2, false, true, 0);
+				DrawSessionList(Caption, "", lineWidthA, lineHeightA, lineTopA, lineLeftA, textLeftA, textLeftA2, false, true, 0);
 				if (bSwitch || Playerz < 16)
 				{
 					for (int i = 0; i < PlayerZList1.size(); i++)
@@ -2725,33 +1955,25 @@ namespace PZSys
 						DrawSessionList(PlayerZList2[i], PlayerZLevel2[i], lineWidthB, lineHeightB, (float)45.0 + (float)i * lineTopB, lineLeftB, textLeftB, textLeftB2, true, false, i);
 					}
 				}
-
-				GRAPHICS::DRAW_SCALEFORM_MOVIE_FULLSCREEN(iBc, 255, 255, 255, 255, 0);
-
-				WAIT(1);
+				WAIT(0);
 			} while (GetTickCount() < maxTickCount);
-			waitTime = 1000;
+			waitTime = 500;
 
-			if (ButtonDown(PZData::MySettings.Control_Players, true))
+			if (GVM::ButtonDown(PZData::MySettings.Control_Keys_Players_List))
 				bSwitch = !bSwitch;
-			else if (ButtonDown(PZData::MySettings.Control_Open, true) || WHileKeyDown(PZData::MySettings.Keys_Open))
-			{
-				bTrigMenu = true;
-				WAIT(1000);
-				break;
-			}
 
-			if (iWait < InGameTime())
+			if (WaitFor < InGameTime())
 				break;
 		}
-
-		CloseBaseHelpBar(iBc);
 	}
 
-	vector<PZclass::PhoneContact*> YourFriends = {};
-	int PhoneScales = -1;
-
-	bool PlayerOnline(string id)
+	void TimeOutThisPed(Ped peddy)
+	{
+		int PedInList = ReteaveBrain(peddy);
+		if (PedInList < (int)PedList.size() && PedInList > -1)
+				PedList[PedInList].TimeOn = 0;
+	}
+	bool PlayerOnline(const std::string& id)
 	{
 		bool b = false;
 		for (int i = 0; i < (int)PedList.size(); i++)
@@ -2764,430 +1986,926 @@ namespace PZSys
 		}
 		return b;
 	}
-	void ContactInSession(PZclass::PhoneContact* myCon)
+
+	void FindAddCars()
 	{
-		Vector3 LandHere = FowardOf(PLAYER::PLAYER_PED_ID(), 5, true);
-		myCon->InSession = true;
-		myCon->YourFriend.Follower = true;
-		myCon->YourFriend.WanBeFriends = false;
-		myCon->YourFriend.BlipColour = 38;
-		myCon->YourFriend.TimeOn = InGameTime() + PZSetMaxSession;
-		if (myCon->YourFriend.PrefredVehicle != 0 && myCon->YourFriend.PrefredVehicle < 8)
+		const std::string sVehList01 = GetDir() + "/PlayerZero/Vehicles/StandardRoadVehicles.ini";
+		PreVeh_01 = ReadFile(sVehList01);
+		if (PreVeh_01.size() == 0)
 		{
-			if (myCon->YourFriend.PrefredVehicle == 5 || myCon->YourFriend.PrefredVehicle == 3)
-				myCon->YourFriend.IsPlane = true;
-			else if (myCon->YourFriend.PrefredVehicle == 4 || myCon->YourFriend.PrefredVehicle == 2)
-				myCon->YourFriend.IsHeli = true;
+			const std::vector<std::string> PreVehSet_01 = {
+				"PFISTER811", //><!-- 811 -->
+				"ADDER", //>
+				"AUTARCH", //>
+				"BANSHEE2", //><!-- Banshee 900R -->
+				"OPENWHEEL1", //><!-- BR8, should be Open Wheel class -->
+				"BULLET", //>
+				"CHAMPION", //>
+				"CHEETAH", //>
+				"CYCLONE", //>
+				"DEVESTE", //>
+				"OPENWHEEL2", //><!-- DR1, should be Open Wheel class -->
+				"EMERUS", //>
+				"ENTITYXF", //>
+				"ENTITY2", //><!-- Entity XXR -->
+				"SHEAVA", //><!-- ETR1 -->
+				"FMJ", //>
+				"FURIA", //>
+				"GP1", //>
+				"IGNUS", //>
+				"INFERNUS", //>
+				"ITALIGTB", //>
+				"ITALIGTB2", //><!-- Itali GTB Custom -->
+				"KRIEGER", //>
+				"LM87", //>
+				"OSIRIS", //>
+				"NERO", //>
+				"NERO2", //><!-- Nero Custom -->
+				"PENETRATOR", //>
+				"FORMULA", //><!-- PR4, should be Open Wheel class -->
+				"FORMULA2", //><!-- R88, should be Open Wheel class -->
+				"LE7B", //><!-- RE-7B -->
+				"REAPER", //>
+				"VOLTIC2", //><!-- Rocket Voltic -->
+				"S80", //>
+				"SC1", //>
+				"SCRAMJET", //>
+				"SULTANRS", //>
+				"T20", //>
+				"TAIPAN", //>
+				"TEMPESTA", //>
+				"TEZERACT", //>
+				"THRAX", //>
+				"TIGON", //>
+				"TORERO2", //><!-- Torero XO -->
+				"TURISMOR", //>
+				"TYRANT", //>
+				"TYRUS", //>
+				"VACCA", //>
+				"VAGNER", //>
+				"VIGILANTE", //>
+				"VISIONE", //>
+				"VOLTIC", //>
+				"PROTOTIPO", //><!-- X80 Proto -->
+				"XA21", //>
+				"ZENO", //>
+				"ZENTORNO", //>
+				"ZORRUSSO", //>
+				"COGCABRIO", //>
+				"EXEMPLAR", //>
+				"F620", //>
+				"FELON", //>
+				"FELON2", //><!-- Felon GT -->
+				"JACKAL", //>
+				"KANJOSJ", //>
+				"ORACLE", //>
+				"ORACLE2", //><!-- Oracle XS -->
+				"POSTLUDE", //>
+				"PREVION", //>
+				"SENTINEL2", //><!-- Sentinel -->
+				"SENTINEL", //><!-- Sentinel XS -->
+				"WINDSOR", //>
+				"WINDSOR2", //><!-- Windsor Drop -->
+				"ZION", //>
+				"ZION2", //><!-- Zion Cabrio -->
+				"DRAFTER", //><!-- 8F Drafter -->
+				"NINEF", //>
+				"NINEF2", //><!-- 9F Cabrio -->
+				"TENF", //>
+				"TENF2", //><!-- 10F Widebody -->
+				"ALPHA", //>
+				"ZR380", //><!-- Apocalypse ZR380 -->
+				"BANSHEE", //>
+				"BESTIAGTS", //>
+				"BLISTA2", //><!-- Blista Compact -->
+				"BUFFALO", //>
+				"BUFFALO2", //><!-- Buffalo S -->
+				"CALICO", //><!-- Calico GTF -->
+				"CARBONIZZARE", //>
+				"COMET2", //><!-- Comet -->
+				"COMET3", //><!-- Comet Retro Custom -->
+				"COMET6", //><!-- Comet S2 -->
+				"COMET7", //><!-- Comet S2 Cabrio -->
+				"COMET4", //><!-- Comet Safari -->
+				"COMET5", //><!-- Comet SR -->
+				"COQUETTE", //>
+				"COQUETTE4", //><!-- Coquette D10 -->
+				"CORSITA", //>
+				"CYPHER", //>
+				"TAMPA2", //><!-- Drift Tampa -->
+				"ELEGY", //><!-- Elegy Retro Custom -->
+				"ELEGY2", //><!-- Elegy RH8 -->
+				"EUROS", //>
+				"FELTZER2", //><!-- Feltzer -->
+				"FLASHGT", //>
+				"FUROREGT", //>
+				"FUSILADE", //>
+				"FUTO", //>
+				"FUTO2", //><!-- Futo GTX -->
+				"ZR3802", //><!-- Future Shock ZR380 -->
+				"GB200", //>
+				"BLISTA3", //><!-- Go Go Monkey Blista -->
+				"GROWLER", //>
+				"HOTRING", //>
+				"IMORGON", //>
+				"ISSI7", //><!-- Issi Sport -->
+				"ITALIGTO", //>
+				"ITALIRSX", //>
+				"JESTER", //>
+				"JESTER2", //><!-- Jester (Racecar) -->
+				"JESTER3", //><!-- Jester Classic -->
+				"JESTER4", //><!-- Jester RR -->
+				"JUGULAR", //>
+				"KHAMELION", //>
+				"KOMODA", //>
+				"KURUMA", //>
+				"KURUMA2", //><!-- Kuruma (Armored) -->
+				"LOCUST", //>
+				"LYNX", //>
+				"MASSACRO", //>
+				"MASSACRO2", //><!-- Massacro (Racecar) -->
+				"NEO", //>
+				"NEON", //>
+				"ZR3803", //><!-- Nightmare ZR380 -->
+				"OMNIS", //>
+				"OMNISEGT", //>
+				"PARAGON", //>
+				"PARAGON2", //><!-- Paragon R (Armored) -->
+				"PARIAH", //>
+				"PENUMBRA", //>
+				"PENUMBRA2", //><!-- Penumbra FF -->
+				"RAIDEN", //>
+				"RAPIDGT", //>
+				"RAPIDGT2", //><!-- Rapid GT Cabrio -->
+				"RAPTOR", //>
+				"REMUS", //>
+				"REVOLTER", //>
+				"RT3000", //>
+				"RUSTON", //>
+				"SCHAFTER4", //><!-- Schafter LWB -->
+				"SCHAFTER3", //><!-- Schafter V12 -->
+				"SCHLAGEN", //>
+				"SCHWARZER", //>
+				"SENTINEL3", //><!-- Sentinel Classic -->
+				"SENTINEL4", //><!-- Sentinel Classic Widebody -->
+				"SEVEN70", //>
+				"SM722", //>
+				"SPECTER", //>
+				"SPECTER2", //><!-- Specter Custom -->
+				"BUFFALO3", //><!-- Sprunk Buffalo -->
+				"STREITER", //>
+				"SUGOI", //>
+				"SULTAN", //>
+				"SULTAN2", //><!-- Sultan Classic -->
+				"SULTAN3", //><!-- Sultan RS Classic -->
+				"SURANO", //>
+				"TROPOS", //>
+				"VSTR", //><!-- V-STR -->
+				"VECTRE", //>
+				"VERLIERER2", //>
+				"VETO", //><!-- Veto Classic -->
+				"VETO2", //><!-- Veto Modern -->
+				"ZR350", //>
+				"DOMINATOR4", //><!-- Apocalypse Dominator -->
+				"IMPALER2", //><!-- Apocalypse Impaler -->
+				"IMPERATOR", //><!-- Apocalypse Imperator -->
+				"SLAMVAN4", //><!-- Apocalypse Slamvan -->
+				"DUKES3", //><!-- Beater Dukes -->
+				"BLADE", //>
+				"BUCCANEER", //>
+				"BUCCANEER2", //><!-- Buccaneer Custom -->
+				"BUFFALO4", //><!-- Buffalo STX -->
+				"STALION2", //><!-- Burger Shot Stallion -->
+				"CHINO", //>
+				"CHINO2", //><!-- Chino Custom -->
+				"CLIQUE", //>
+				"COQUETTE3", //><!-- Coquette BlackFin -->
+				"DEVIANT", //>
+				"DOMINATOR", //>
+				"DOMINATOR7", //><!-- Dominator ASP -->
+				"DOMINATOR8", //><!-- Dominator GTT -->
+				"DOMINATOR3", //><!-- Dominator GTX -->
+				"YOSEMITE2", //><!-- Drift Yosemite -->
+				"DUKES2", //><!-- Duke O'Death -->
+				"DUKES", //>
+				"ELLIE", //>
+				"FACTION", //>
+				"FACTION2", //><!-- Faction Custom -->
+				"FACTION3", //><!-- Faction Custom Donk -->
+				"DOMINATOR5", //><!-- Future Shock Dominator -->
+				"IMPALER3", //><!-- Future Shock Impaler -->
+				"IMPERATOR2", //><!-- Future Shock Imperator -->
+				"SLAMVAN5", //><!-- Future Shock Slamvan -->
+				"GAUNTLET", //>
+				"GAUNTLET3", //><!-- Gauntlet Classic -->
+				"GAUNTLET5", //><!-- Gauntlet Classic Custom -->
+				"GAUNTLET4", //><!-- Gauntlet Hellfire -->
+				"GREENWOOD", //>
+				"HERMES", //>
+				"HOTKNIFE", //>
+				"HUSTLER", //>
+				"IMPALER", //>
+				"SLAMVAN2", //><!-- Lost Slamvan -->
+				"LURCHER", //>
+				"MANANA2", //><!-- Manana Custom -->
+				"MOONBEAM", //>
+				"MOONBEAM2", //><!-- Moonbeam Custom -->
+				"DOMINATOR6", //><!-- Nightmare Dominator -->
+				"IMPALER4", //><!-- Nightmare Impaler -->
+				"IMPERATOR3", //><!-- Nightmare Imperator -->
+				"SLAMVAN6", //><!-- Nightmare Slamvan -->
+				"NIGHTSHADE", //>
+				"PEYOTE2", //><!-- Peyote Gasser -->
+				"PHOENIX", //>
+				"PICADOR", //>
+				"DOMINATOR2", //><!-- Pisswasser Dominator -->
+				"RATLOADER", //>
+				"RATLOADER2", //><!-- Rat-Truck -->
+				"GAUNTLET2", //><!-- Redwood Gauntlet -->
+				"RUINER", //>
+				"RUINER3", //><!-- Ruiner 2000 wreck -->
+				"RUINER2", //><!-- Ruiner 2000 -->
+				"RUINER4", //><!-- Ruiner ZZ-8 -->
+				"SABREGT", //>
+				"SABREGT2", //><!-- Sabre Turbo Custom -->
+				"SLAMVAN", //>
+				"SLAMVAN3", //><!-- Slamvan Custom -->
+				"STALION", //>
+				"TAMPA", //>
+				"TULIP", //>
+				"VAMOS", //>
+				"VIGERO", //>
+				"VIGERO2", //><!-- Vigero ZX -->
+				"VIRGO", //>
+				"VIRGO3", //><!-- Virgo Classic -->
+				"VIRGO2", //><!-- Virgo Classic Custom -->
+				"VOODOO", //>
+				"VOODOO2", //><!-- Voodoo Custom -->
+				"TAMPA3", //><!-- Weaponized Tampa -->
+				"WEEVIL2", //><!-- Weevil Custom -->
+				"YOSEMITE", //>
+				"Z190", //><!-- 190z -->
+				"ARDENT", //>
+				"CASCO", //>
+				"CHEBUREK", //>
+				"CHEETAH2", //><!-- Cheetah Classic -->
+				"COQUETTE2", //><!-- Coquette Classic -->
+				"DELUXO", //>
+				"DYNASTY", //>
+				"FAGALOA", //>
+				"BTYPE2", //><!-- Fränken Stange -->
+				"GT500", //>
+				"INFERNUS2", //><!-- Infernus Classic -->
+				"JB700", //>
+				"JB7002", //><!-- JB 700W -->
+				"MAMBA", //>
+				"MANANA", //>
+				"MICHELLI", //>
+				"MONROE", //>
+				"NEBULA", //>
+				"PEYOTE", //>
+				"PEYOTE3", //><!-- Peyote Custom -->
+				"PIGALLE", //>
+				"RAPIDGT3", //><!-- Rapid GT Classic -->
+				"RETINUE", //>
+				"RETINUE2", //><!-- Retinue MkII -->
+				"BTYPE", //><!-- Roosevelt -->
+				"BTYPE3", //><!-- Roosevelt Valor -->
+				"SAVESTRA", //>
+				"STINGER", //>
+				"STINGERGT", //>
+				"FELTZER3", //><!-- Stirling GT -->
+				"STROMBERG", //>
+				"SWINGER", //>
+				"TOREADOR", //>
+				"TORERO", //>
+				"TORNADO", //>
+				"TORNADO2", //><!-- Tornado Cabrio -->
+				"TORNADO3", //><!-- Rusty Tornado -->
+				"TORNADO4", //><!-- Mariachi Tornado -->
+				"TORNADO5", //><!-- Tornado Custom -->
+				"TORNADO6", //><!-- Tornado Rat Rod -->
+				"TURISMO2", //><!-- Turismo Classic -->
+				"VISERIS", //>
+				"ZTYPE", //>
+				"ZION3", //><!-- Zion Classic -->
+				"CERBERUS", //><!-- Apocalypse Cerberus -->
+				"CERBERUS2", //><!-- Future Shock Cerberus -->
+				"GUARDIAN", //>
+				"CERBERUS3", //><!-- Nightmare Cerberus -->
+				"ASEA", //>
+				"ASTEROPE", //>
+				"CINQUEMILA", //>
+				"COGNOSCENTI", //>
+				"COGNOSCENTI2", //><!-- Cognoscenti (Armored) -->
+				"COG55", //><!-- Cognoscenti 55 -->
+				"COG552", //><!-- Cognoscenti 55 (Armored) -->
+				"DEITY", //>
+				"EMPEROR", //>
+				"EMPEROR2", //><!-- Emperor beater variant -->
+				"FUGITIVE", //>
+				"GLENDALE", //>
+				"GLENDALE2", //><!-- Glendale Custom -->
+				"INGOT", //>
+				"INTRUDER", //>
+				"PREMIER", //>
+				"PRIMO", //>
+				"PRIMO2", //><!-- Primo Custom -->
+				"REGINA", //>
+				"RHINEHART", //>
+				"ROMERO", //>
+				"SCHAFTER2", //>
+				"SCHAFTER6", //><!-- Schafter LWB (Armored) -->
+				"SCHAFTER5", //><!-- Schafter V12 (Armored) -->
+				"STAFFORD", //>
+				"STANIER", //>
+				"STRATUM", //>
+				"STRETCH", //>
+				"SUPERD", //>
+				"SURGE", //>
+				"TAILGATER", //>
+				"TAILGATER2", //><!-- Tailgater S -->
+				"WARRENER", //>
+				"WARRENER2", //><!-- Warrener HKR -->
+				"WASHINGTON", //>
+				"BRUISER", //><!-- Apocalypse Bruiser -->
+				"BRUTUS", //><!-- Apocalypse Brutus -->
+				"MONSTER3", //><!-- Apocalypse Sasquatch -->
+				"BIFTA", //>
+				"BLAZER", //>
+				"BLAZER5", //><!-- Blazer Aqua -->
+				"BLAZER2", //><!-- Blazer Lifeguard -->
+				"BODHI2", //>
+				"BRAWLER", //>
+				"CARACARA2", //><!-- Caracara 4x4 -->
+				"TROPHYTRUCK2", //><!-- Desert Raid -->
+				"DRAUGUR", //>
+				"DUBSTA3", //><!-- Dubsta 6x6 -->
+				"DUNE", //>
+				"DUNE3", //><!-- Dune FAV -->
+				"DLOADER", //>
+				"EVERON", //>
+				"FREECRAWLER", //>
+				"BRUISER2", //><!-- Future Shock Bruiser -->
+				"BRUTUS2", //><!-- Future Shock Brutus -->
+				"MONSTER4", //><!-- Future Shock Sasquatch -->
+				"HELLION", //>
+				"BLAZER3", //><!-- Hot Rod Blazer -->
+				"BFINJECTION", //>
+				"KALAHARI", //>
+				"KAMACHO", //>
+				"MONSTER", //><!-- Liberator -->
+				"MARSHALL", //>
+				"MESA3", //><!-- Merryweather Mesa -->
+				"BRUISER3", //><!-- Nightmare Bruiser -->
+				"BRUTUS3", //><!-- Nightmare Brutus -->
+				"MONSTER5", //><!-- Nightmare Sasquatch -->
+				"OUTLAW", //>
+				"PATRIOT3", //><!-- Patriot Mil-Spec -->
+				"DUNE4", //><!-- Ramp Buggy mission variant -->
+				"DUNE5", //><!-- Ramp Buggy -->
+				"RANCHERXL", //>
+				"REBEL2", //>
+				"RIATA", //>
+				"REBEL", //><!-- Rusty Rebel -->
+				"SANDKING2", //><!-- Sandking SWB -->
+				"SANDKING", //><!-- Sandking XL -->
+				"DUNE2", //><!-- Space Docker -->
+				"BLAZER4", //><!-- Street Blazer -->
+				"TROPHYTRUCK", //>
+				"VAGRANT", //>
+				"VERUS", //>
+				"WINKY", //>
+				"YOSEMITE3", //><!-- Yosemite Rancher -->
+				"ZHABA", //>
+				"ASTRON", //>
+				"BALLER", //>
+				"BALLER2", //><!-- Baller 2nd gen variant -->
+				"BALLER3", //><!-- Baller LE -->
+				"BALLER5", //><!-- Baller LE (Armored) -->
+				"BALLER4", //><!-- Baller LE LWB -->
+				"BALLER6", //><!-- Baller LE LWB (Armored) -->
+				"BALLER7", //><!-- Baller ST -->
+				"BJXL", //>
+				"CAVALCADE", //>
+				"CAVALCADE2", //><!-- Cavalcade 2nd gen variant -->
+				"CONTENDER", //>
+				"DUBSTA", //>
+				"DUBSTA2", //><!-- Dubsta black variant -->
+				"FQ2", //>
+				"GRANGER", //>
+				"GRANGER2", //><!-- Granger 3600LX -->
+				"GRESLEY", //>
+				"HABANERO", //>
+				"HUNTLEY", //>
+				"IWAGEN", //>
+				"JUBILEE", //>
+				"LANDSTALKER", //>
+				"LANDSTALKER2", //><!-- Landstalker XL -->
+				"MESA", //>
+				"NOVAK", //>
+				"PATRIOT", //>
+				"PATRIOT2", //><!-- Patriot Stretch -->
+				"RADI", //>
+				"REBLA", //>
+				"ROCOTO", //>
+				"SEMINOLE", //>
+				"SEMINOLE2", //><!-- Seminole Frontier -->
+				"SERRANO", //>
+				"SQUADDIE", //>
+				"TOROS", //>
+				"XLS", //>
+				"XLS2", //><!-- XLS (Armored) -->
+				"ISSI4", //><!-- Apocalypse Issi -->
+				"ASBO", //>
+				"BLISTA", //>
+				"KANJO", //><!-- Blista Kanjo -->
+				"BRIOSO", //>
+				"BRIOSO2", //><!-- Brioso 300 -->
+				"BRIOSO3", //><!-- Brioso 300 Widebody -->
+				"CLUB", //>
+				"DILETTANTE", //>
+				"ISSI5", //><!-- Future Shock Issi -->
+				"ISSI2", //>
+				"ISSI3", //><!-- Issi Classic -->
+				"ISSI6", //><!-- Nightmare Issi -->
+				"PANTO", //>
+				"PRAIRIE", //>
+				"RHAPSODY", //>
+				"WEEVIL", //>
+				"CONTENDER", //>
+				"DUBSTA3", //><!-- Dubsta 6x6 -->
+				"GUARDIAN", //>
+				"PICADOR", //>
+				"SADLER", //>
+				"SLAMVAN", //>
+				"SLAMVAN3", //><!-- Slamvan Custom -->
+				"YOSEMITE", //>
+				"BOXVILLE5", //><!-- Armored Boxville -->
+				"BISON", //>
+				"BOBCATXL", //>
+				"BURRITO", //>
+				"CAMPER", //>
+				"GBURRITO", //><!-- Gang Burrito Lost MC variant -->
+				"GBURRITO2", //><!-- Gang Burrito heist variant -->
+				"JOURNEY", //>
+				"MINIVAN", //>
+				"MINIVAN2", //><!-- Minivan Custom -->
+				"PARADISE", //>
+				"PONY", //>
+				"PONY2", //><!-- Pony Smoke on the Water variant -->
+				"RUMPO", //>
+				"RUMPO2", //><!-- Rumpo Deludamol variant -->
+				"RUMPO3", //><!-- Rumpo Custom -->
+				"SPEEDO", //>
+				"SPEEDO4", //><!-- Speedo Custom -->
+				"SURFER", //>
+				"SURFER2", //><!-- Surfer beater variant -->
+				"TACO", //>
+				"YOUGA", //>
+				"YOUGA2", //><!-- Youga Classic -->
+				"YOUGA3", //><!-- Youga Classic 4x4 -->
+				"YOUGA4", //><!-- Youga Custom -->
+				"BRICKADE", //>
+				"RALLYTRUCK", //><!-- Dune -->
+				"SLAMTRUCK", //>
+				"WASTLNDR",
+				"AKUMA", //>
+				"DEATHBIKE", //><!-- Apocalypse Deathbike -->
+				"AVARUS", //>
+				"BAGGER", //>
+				"BATI", //>
+				"BATI2", //><!-- Bati 801RR -->
+				"BF400", //>
+				"CARBONRS", //>
+				"CHIMERA", //>
+				"CLIFFHANGER", //>
+				"DAEMON", //><!-- Daemon Lost MC variant -->
+				"DAEMON2", //><!-- Daemon Bikers DLC variant -->
+				"DEFILER", //>
+				"DIABLOUS", //>
+				"DIABLOUS2", //><!-- Diabolus Custom -->
+				"DOUBLE", //>
+				"ENDURO", //>
+				"ESSKEY", //>
+				"FAGGIO2", //>
+				"FAGGIO3", //><!-- Faggio Mod -->
+				"FAGGIO", //><!-- Faggio Sport -->
+				"FCR", //>
+				"FCR2", //><!-- FCR 1000 Custom -->
+				"DEATHBIKE2", //><!-- Future Shock Deathbike -->
+				"GARGOYLE", //>
+				"HAKUCHOU", //>
+				"HAKUCHOU2", //><!-- Hakuchou Drag -->
+				"HEXER", //>
+				"INNOVATION", //>
+				"LECTRO", //>
+				"MANCHEZ", //>
+				"MANCHEZ2", //><!-- Manchez Scout -->
+				"NEMESIS", //>
+				"NIGHTBLADE", //>
+				"DEATHBIKE3", //><!-- Nightmare Deathbike -->
+				"PCJ", //>
+				"RROCKET", //><!-- Rampant Rocket -->
+				"RATBIKE", //>
+				"REEVER", //>
+				"RUFFIAN", //>
+				"SANCHEZ", //><!-- Sanchez livery variant -->
+				"SANCHEZ2", //>
+				"SANCTUS", //>
+				"SHINOBI", //>
+				"SHOTARO", //>
+				"SOVEREIGN", //>
+				"STRYDER", //>
+				"THRUST", //>
+				"VADER", //>
+				"VINDICATOR", //>
+				"VORTEX", //>
+				"WOLFSBANE", //>
+				"ZOMBIEA", //><!-- Zombie Bobber -->
+				"ZOMBIEB", //><!-- Zombie Chopper -->  
+				"aleutian", // SUVs
+				"baller8", // SUVs
+				"cavalcade3", // SUVs
+				"dorado", // SUVs
+				"vivanite", // SUVs
+				"asterope2", // Sedans
+				"impaler5", // Sedans
+				"dominator9", // Muscle
+				"driftyosemite", // Muscle
+				"impaler6", // Muscle
+				"Vigero3", // Muscle
+				"turismo3", // Super
+				"drifteuros", // Sports
+				"driftfuto", // Sports
+				"driftjester", // Sports
+				"driftremus", // Sports
+				"drifttampa", // Sports
+				"driftzr350", // Sports
+				"driftfr36", // Coupes
+				"fr36", // Coupes
+				"terminus", // Off-Road
+				"polgauntlet", //  Emergency
+			};
 
-			myCon->YourFriend.ApprochPlayer = true;
-			myCon->YourFriend.Driver = true;
-			PZclass::FindVeh myCar = PZclass::FindVeh(15.00f, 145.00f, true, false, myCon->YourFriend);
-			MakeCarz.push_back(myCar);
+			PreVeh_01 = PreVehSet_01;
+			WriteFile(sVehList01, PreVeh_01);
 		}
-		else
+
+		const std::string sVehList02 = GetDir() + "/PlayerZero/Vehicles/HeliNoWeapons.ini";
+		PreVeh_02 = ReadFile(sVehList02);
+		if (PreVeh_02.size() == 0)
 		{
-			PZclass::FindPed MyFinda = PZclass::FindPed(35.00f, 220.00f, myCon->YourFriend);
-			MakeFrenz.push_back(MyFinda);
+			const std::vector<std::string> PreVehSet_02 = {
+				"BUZZARD2", //><!-- Buzzard -->
+				"CARGOBOB", //><!-- Military Cargobob -->
+				"CARGOBOB2", //><!-- Jetsam Cargobob -->
+				"CONADA", //>
+				"FROGGER", //>
+				"FROGGER2", //><!-- Frogger Trevor Philips Industries variant -->
+				"MAVERICK", //>
+				"POLMAV", //>
+				"SUPERVOLITO", //>
+				"SUPERVOLITO2", //><!-- SuperVolito Carbon -->
+				"SWIFT", //>
+				"SWIFT2", //><!-- Swift Deluxe -->
+				"VOLATUS", //>
+			};
+
+			PreVeh_02 = PreVehSet_02;
+			WriteFile(sVehList02, PreVeh_02);
 		}
-	}
-	int GetSelectedContact()
-	{
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(PhoneScales, "GET_CURRENT_SELECTION");
-		int num = GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION();
-		while (!GRAPHICS::_0x768FF8961BA904D6(num))
-			WAIT(1);
-		int output = GRAPHICS::_0x2DE7EFA66B906036(num);
 
-		LoggerLight("GetSelectedContact == " + std::to_string(output));
-
-		return output;
-	}
-	void AnswerPhone(string ContactName)
-	{
-		LoggerLight("AnswerPhone, ContactName == " + ContactName);
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(PhoneScales, "SET_DATA_SLOT");
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(4);
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(0);
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(3);
-		GRAPHICS::_BEGIN_TEXT_COMPONENT("STRING");
-		UI::_0x761B77454205A61D((LPSTR)ContactName.c_str(), -1);
-		GRAPHICS::_END_TEXT_COMPONENT();
-		GRAPHICS::_BEGIN_TEXT_COMPONENT("CELL_2000");
-		UI::_ADD_TEXT_COMPONENT_STRING("CELL_300");
-		GRAPHICS::_END_TEXT_COMPONENT();
-		GRAPHICS::_BEGIN_TEXT_COMPONENT("STRING");
-		UI::_0x761B77454205A61D(UI::_GET_LABEL_TEXT("CELL_211"), -1);
-		GRAPHICS::_END_TEXT_COMPONENT();
-		GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(PhoneScales, "DISPLAY_VIEW");
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(4);
-		GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-
-		WAIT(4000);
-		ClosePhone();
-	}
-	void DrawPhoneContact(int index, string name)
-	{
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(PhoneScales, "SET_DATA_SLOT");
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(2);
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(index);
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION_PARAMETER_INT(0);
-		GRAPHICS::_BEGIN_TEXT_COMPONENT("STRING");
-		UI::_ADD_TEXT_COMPONENT_STRING((LPSTR)name.c_str());
-		GRAPHICS::_END_TEXT_COMPONENT();
-		GRAPHICS::_BEGIN_TEXT_COMPONENT("CELL_999");
-		GRAPHICS::_END_TEXT_COMPONENT();
-		GRAPHICS::_BEGIN_TEXT_COMPONENT("CELL_2000");
-		UI::_ADD_TEXT_COMPONENT_STRING("CHAR_BLANK_ENTRY");
-		GRAPHICS::_END_TEXT_COMPONENT();
-		GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-	}
-	void ClosePhone()
-	{
-
-		GRAPHICS::_PUSH_SCALEFORM_MOVIE_FUNCTION(PhoneScales, "SHUTDOWN_MOVIE");
-		GRAPHICS::_POP_SCALEFORM_MOVIE_FUNCTION_VOID();
-		WAIT(1);
-		YourFriends.clear();
-		PhoneScales = -1;
-		MOBILE::DESTROY_MOBILE_PHONE();
-		GAMEPLAY::TERMINATE_ALL_SCRIPTS_WITH_THIS_NAME("cellphone_flashhand");
-		GAMEPLAY::TERMINATE_ALL_SCRIPTS_WITH_THIS_NAME("cellphone_controller");
-		WAIT(1);
-		StartScript("cellphone_flashhand", 1424);
-		StartScript("cellphone_controller", 1424);
-	}
-
-	int ButtDelay = 0;
-	int PhoneAdd = 30;
-
-	void PhoneFreeking()
-	{
-		if (SCRIPT::_GET_NUMBER_OF_INSTANCES_OF_STREAMED_SCRIPT(MyHashKey("cellphone_flashhand")) > 0 && SCRIPT::_GET_NUMBER_OF_INSTANCES_OF_STREAMED_SCRIPT(MyHashKey("appcontacts")) > 0)
+		const std::string sVehList03 = GetDir() + "/PlayerZero/Vehicles/PlaneNoWeapons.ini";
+		PreVeh_03 = ReadFile(sVehList03);
+		if (PreVeh_03.size() == 0)
 		{
-			if (PhoneScales == -1)
-			{
-				ButtDelay = InGameTime() + 500;
-				Hash MyKey = ENTITY::GET_ENTITY_MODEL(PLAYER::PLAYER_PED_ID());
-				if (MyKey == GAMEPLAY::GET_HASH_KEY("player_zero"))
-					PhoneScales = GRAPHICS::REQUEST_SCALEFORM_MOVIE("cellphone_ifruit");
-				else if (MyKey == GAMEPLAY::GET_HASH_KEY("player_one"))
-					PhoneScales = GRAPHICS::REQUEST_SCALEFORM_MOVIE("cellphone_badger");
-				else if (MyKey == GAMEPLAY::GET_HASH_KEY("player_two"))
-					PhoneScales = GRAPHICS::REQUEST_SCALEFORM_MOVIE("cellphone_facade");
-				else
-					PhoneScales = GRAPHICS::REQUEST_SCALEFORM_MOVIE("cellphone_ifruit");
-				PhoneAdd = 35;
-				while (!GRAPHICS::HAS_SCALEFORM_MOVIE_LOADED(PhoneScales))
-					WAIT(1);
+			const std::vector<std::string> PreVehSet_03 = {
+				"CUBAN800", //>
+				"DODO", //>
+				"DUSTER", //>
+				"LUXOR", //>
+				"LUXOR2", //><!-- Luxor Deluxe -->
+				"MAMMATUS", //>
+				"MILJET", //>
+				"NIMBUS", //>
+				"BOMBUSHKA", //><!-- RM-10 Bombushka -->
+				"ALKONOST", //><!-- RO-86 Alkonost -->
+				"SHAMAL", //>
+				"TITAN", //>
+				"VELUM", //>
+				"VELUM2", //><!-- Velum 5-Seater -->
+				"VESTRA", //>
+				"VOLATOL", //>
+				"ALPHAZ1", //>
+				"BESRA", //>
+				"HOWARD", //><!-- Howard NX-25 -->
+				"STUNT", //><!-- Mallard -->
+				"STREAMER216"
+			};
 
-				for (int i = 0; i < (int)PhoneContacts.size(); i++)
-				{
-					if (!PlayerOnline(PhoneContacts[i].YourFriend.MyIdentity))
-						YourFriends.push_back(&PhoneContacts[i]);
-				}
-
-				while ((int)YourFriends.size() > 5)
-				{
-					int iRands = RandomInt(0, (int)YourFriends.size() - 1);
-					YourFriends.erase(YourFriends.begin() + iRands);
-					WAIT(1);
-				}
-			}
-
-			for (int i = 0; i < (int)YourFriends.size(); i++)
-				DrawPhoneContact(i + PhoneAdd, YourFriends[i]->Name);
-
-			if (ButtonDown(176, true) && ButtDelay < InGameTime())
-			{
-				int iBe = GetSelectedContact() - PhoneAdd;
-				if (iBe > -1 && iBe < (int)YourFriends.size())
-				{
-					AnswerPhone(YourFriends[iBe]->Name);
-					ContactInSession(YourFriends[iBe]);
-				}
-				else
-					ClosePhone();
-			}
+			PreVeh_03 = PreVehSet_03;
+			WriteFile(sVehList03, PreVeh_03);
 		}
-		else if (PhoneScales != -1)
-			ClosePhone();
 
+		const std::string sVehList04 = GetDir() + "/PlayerZero/Vehicles/HeliWithWeapons.ini";
+		PreVeh_04 = ReadFile(sVehList04);
+		if (PreVeh_04.size() == 0)
+		{
+			const std::vector<std::string> PreVehSet_04 = {
+				"AKULA", //>
+				"ANNIHILATOR", //>
+				"ANNIHILATOR2", //><!-- Annihilator Stealth -->
+				"BUZZARD", //><!-- Buzzard Attack Chopper -->
+				"HUNTER", //><!-- FH-1 Hunter -->
+				"SAVAGE", //>
+				"SEASPARROW", //>
+				"SEASPARROW2", //><!-- Sparrow -->
+				"VALKYRIE", //>
+				"VALKYRIE2", //><!-- Valkyrie MOD.0 -->
+				"HAVOK", //>
+				"Conada2"
+			};
+
+			PreVeh_04 = PreVehSet_04;
+			WriteFile(sVehList04, PreVeh_04);
+		}
+
+		const std::string sVehList05 = GetDir() + "/PlayerZero/Vehicles/PlaneWithWeapons.ini";
+		PreVeh_05 = ReadFile(sVehList05);
+		if (PreVeh_05.size() == 0)
+		{
+			const std::vector<std::string> PreVehSet_05 = {
+				"MOGUL", //>
+				"PYRO", //>
+				"SEABREEZE", //>
+				"TULA", //>
+				"STRIKEFORCE", //><!-- B-11 Strikeforce -->
+				"HYDRA", //>
+				"STARLING", //><!-- LF-22 Starling -->
+				"NOKOTA", //><!-- P-45 Nokota -->
+				"LAZER", //><!-- P-996 LAZER -->
+				"ROGUE", //>
+				"MICROLIGHT", //><!-- Ultralight -->
+				"MOLOTOK", //><!-- V-65 Molotok -->
+				"RAIJU"
+			};
+			
+			PreVeh_05 = PreVehSet_05;
+			WriteFile(sVehList05, PreVeh_05);
+		}
+
+		const std::string sVehList06 = GetDir() + "/PlayerZero/Vehicles/WeaponisedRoadVehicles.ini";
+		PreVeh_06 = ReadFile(sVehList06);		
+		if (PreVeh_06.size() == 0)
+		{
+			const std::vector<std::string> PreVehSet_06 = {
+				"LIMO2", //><!-- Turreted Limo -->
+				"INSURGENT", //>
+				"INSURGENT2", //><!-- Insurgent Pick-Up -->
+				"INSURGENT3", //><!-- Insurgent Pick-Up Custom -->
+				"NIGHTSHARK", //>
+				"CARACARA", //>
+				"MENACER", //>
+				"TECHNICAL", //>
+				"TECHNICAL2", //><!-- Technical Aqua -->
+				"TECHNICAL3", //><!-- Technical Custom -->
+				"SCARAB", //><!-- Apocalypse Scarab -->
+				"APC", //>
+				"HALFTRACK", //>
+				"SCARAB2", //><!-- Future Shock Scarab -->
+				"SCARAB3", //><!-- Nightmare Scarab -->
+				"RIOT2", //><!-- RCV -->
+				"RHINO", //>
+				"KHANJALI" //><!-- TM-02 Khanjali -->
+			};
+			
+			PreVeh_06 = PreVehSet_06;
+			WriteFile(sVehList06, PreVeh_06);
+		}
 	}
 
-	void ReBuildIni(PZclass::PZSettings* PSet)
+	void ReBuildIni()
 	{
-		std::vector<std::string> AddIni = {
+		const std::vector<std::string> AddIni = {
 			"[Settings]",
-			"Pz_Lang=" + std::to_string(PSet->Pz_Lang),
-			"Aggression=" + std::to_string(PSet->Aggression),
-			"MaxPlayers=" + std::to_string(PSet->MaxPlayers),
-			"MinWait=" + std::to_string(PSet->MinWait),
-			"MaxWait=" + std::to_string(PSet->MaxWait),
-			"MinSession=" + std::to_string(PSet->MinSession),
-			"MaxSession=" + std::to_string(PSet->MaxSession),
-			"MinAccuracy=" + std::to_string(PSet->AccMin),
-			"MaxAccuracy=" + std::to_string(PSet->AccMax),
-			"AirVeh=" + std::to_string(PSet->AirVeh),
-			"FriendlyFire=" + BoolToString(PSet->FriendlyFire),
-			"SpaceWeaps=" + BoolToString(PSet->SpaceWeaps),
-			"NameTags=" + BoolToString(PSet->NameTags),
-			"PassiveMode=" + BoolToString(PSet->PassiveMode),
-			"Debug=" + BoolToString(PSet->Debugger),
-			"NoRadar=" + BoolToString(PSet->NoRadar),
-			"NoNotify=" + BoolToString(PSet->NoNotify),
-			"MobileData=" + BoolToString(PSet->MobileData),
-			"InviteOnly=" + BoolToString(PSet->InviteOnly),
+			"Pz_Lang=" + std::to_string(MySettings.Pz_Lang),
+			"Aggression=" + std::to_string(MySettings.Aggression),
+			"MaxPlayers=" + std::to_string(MySettings.MaxPlayers),
+			"MinWait=" + std::to_string(MySettings.MinWait),
+			"MaxWait=" + std::to_string(MySettings.MaxWait),
+			"MinSession=" + std::to_string(MySettings.MinSession),
+			"MaxSession=" + std::to_string(MySettings.MaxSession),
+			"MinAccuracy=" + std::to_string(MySettings.AccMin),
+			"MaxAccuracy=" + std::to_string(MySettings.AccMax),
+			"AirVeh=" + std::to_string(MySettings.AirVeh),
+			"TFHTA=" + std::to_string(MySettings.TFHTA),
+			"FriendlyFire=" + BoolToString(MySettings.FriendlyFire),
+			"SpaceWeaps=" + BoolToString(MySettings.SpaceWeaps),
+			"NameTags=" + BoolToString(MySettings.NameTags),
+			"PassiveMode=" + BoolToString(MySettings.PassiveMode),
+			"Debug=" + BoolToString(MySettings.Debugger),
+			"PlayerzBlips=" + BoolToString(MySettings.PlayerzBlips),
+			"NoNotify=" + BoolToString(MySettings.NoNotify),
+			"MobileData=" + BoolToString(MySettings.MobileData),
+			"InviteOnly=" + BoolToString(MySettings.InviteOnly),
+			"BackChat=" + BoolToString(MySettings.BackChat),
+			"MenuLeftSide=" + BoolToString(MySettings.MenuLeftSide),
 			"[Controls]",
-			"Control_Players=" + std::to_string(PSet->Control_Players),
-			"Control_Open=" + std::to_string(PSet->Control_Open),
-			"Control_A_Clear=" + std::to_string(PSet->Control_A_Clear),
-			"Control_B_Clear=" + std::to_string(PSet->Control_B_Clear),
-			"Control_A_Invite=" + std::to_string(PSet->Control_A_Invite),
-			"Control_B_Invite=" + std::to_string(PSet->Control_B_Invite),
-			"Keys_Players=" + std::to_string(PSet->Keys_Players),
-			"Keys_Open=" + std::to_string(PSet->Keys_Open),
-			"Keys_Clear=" + std::to_string(PSet->Keys_Clear),
-			"Keys_Invite=" + std::to_string(PSet->Keys_Players),
-			"BackChat=" + BoolToString(PSet->BackChat)
+			"Control_A_Open_Menu=" + std::to_string(MySettings.Control_A_Open_Menu),
+			"Control_B_Open_Menu=" + std::to_string(MySettings.Control_B_Open_Menu),
+			"Control_A_Clear_Session=" + std::to_string(MySettings.Control_A_Clear_Session),
+			"Control_B_Clear_Session=" + std::to_string(MySettings.Control_B_Clear_Session),
+			"Control_A_Invite_Only=" + std::to_string(MySettings.Control_A_Invite_Only),
+			"Control_B_Invite_Only=" + std::to_string(MySettings.Control_B_Invite_Only),
+			"Keys_Open_Menu=" + std::to_string(MySettings.Keys_Open_Menu),
+			"Keys_Clear_Session=" + std::to_string(MySettings.Keys_Clear_Session),
+			"Keys_Invite_Only=" + std::to_string(MySettings.Keys_Invite_Only),
+			"Control_Keys_Players_List=" + std::to_string(MySettings.Control_Keys_Players_List),
+			"Control_Keys_AddPed=" + std::to_string(MySettings.Control_Keys_AddPed),
+			"Control_Keys_EnterVeh=" + std::to_string(MySettings.Control_Keys_EnterVeh),
+			"Control_Keys_DissmisPed=" + std::to_string(MySettings.Control_Keys_DissmisPed)
 		};
 
-		ofstream MyFile(GetDir() + "/PlayerZero/PzSettings.ini");
-		for (int i = 0; i < AddIni.size(); i++)
-		{
-			MyFile << "\n";
-			MyFile << AddIni[i];
-		}
-		MyFile.close();
+		WriteFile(PzSettingsDir, AddIni);
 	}
-	void FindSettings(PZclass::PZSettings* mySet)
+	void FindSettings()
 	{
 		LoggerLight("FindSettings");
 
-		string sSettings = GetDir() + "/PlayerZero/PzSettings.ini";
-		vector<string> MySettings = ReadFile(sSettings);
+		std::vector<std::string> setString = ReadFile(PzSettingsDir);
 
-		if (MySettings.size() == 0)
-		{
-			string OutputFolder = GetDir() + "/PlayerZero";
-			if (CreateDirectoryA((LPSTR)OutputFolder.c_str(), NULL) || ERROR_ALREADY_EXISTS == GetLastError())
-			{
-				LoggerLight("PlayerZero, Direct Working");
-				FirstRun = true;
-			}
-			else
-			{
-				LoggerLight("PlayerZero, Direct failed");
-			}
-		}
+		if ((int)setString.size() == 0)
+			FirstRun = true;
 		else
 		{
-			for (int i = 0; i < (int)MySettings.size(); i++)
+			for (int i = 0; i < (int)setString.size(); i++)
 			{
-				if (StringContains("Pz_Lang", MySettings[i]))
-				{
-					mySet->Pz_Lang = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("Aggression", MySettings[i]))
-				{
-					mySet->Aggression = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("MaxPlayers", MySettings[i]))
-				{
-					mySet->MaxPlayers = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("MinWait", MySettings[i]))
-				{
-					mySet->MinWait = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("MaxWait", MySettings[i]))
-				{
-					mySet->MaxWait = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("MinSession", MySettings[i]))
-				{
-					mySet->MinSession = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("MaxSession", MySettings[i]))
-				{
-					mySet->MaxSession = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("MinAccuracy", MySettings[i]))
-				{
-					mySet->AccMin = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("MaxAccuracy", MySettings[i]))
-				{
-					mySet->AccMax = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("AirVeh", MySettings[i]))
-				{
-					mySet->AirVeh = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("FriendlyFire", MySettings[i]))
-				{
-					mySet->FriendlyFire = StringBool(MySettings[i]);
-				}
-				else if (StringContains("SpaceWeaps", MySettings[i]))
-				{
-					mySet->SpaceWeaps = StringBool(MySettings[i]);
-				}
-				else if (StringContains("NameTags", MySettings[i]))
-				{
-					mySet->NameTags = StringBool(MySettings[i]);
-				}
-				else if (StringContains("PassiveMode", MySettings[i]))
-				{
-					mySet->PassiveMode = StringBool(MySettings[i]);
-				}
-				else if (StringContains("Debug", MySettings[i]))
-				{
-					mySet->Debugger = StringBool(MySettings[i]);
-				}
-				else if (StringContains("NoRadar", MySettings[i]))
-				{
-					mySet->NoRadar = StringBool(MySettings[i]);
-				}
-				else if (StringContains("NoNotify", MySettings[i]))
-				{
-					mySet->NoNotify = StringBool(MySettings[i]);
-				}
-				else if (StringContains("MobileData", MySettings[i]))
-				{
-					mySet->MobileData = StringBool(MySettings[i]);
-				}
-				else if (StringContains("InviteOnly", MySettings[i]))
-				{
-					mySet->InviteOnly = StringBool(MySettings[i]);
-				}
-				else if (StringContains("BackChat", MySettings[i]))
-				{
-					mySet->BackChat = StringBool(MySettings[i]);
-				}
-				else if (StringContains("Control_Players", MySettings[i]))
-				{
-					mySet->Control_Players = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("Control_Open", MySettings[i]))
-				{
-					mySet->Control_Open = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("Control_A_Clear", MySettings[i]))
-				{
-					mySet->Control_A_Clear = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("Control_B_Clear", MySettings[i]))
-				{
-					mySet->Control_B_Clear = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("Control_A_Invite", MySettings[i]))
-				{
-					mySet->Control_A_Invite = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("Control_B_Invite", MySettings[i]))
-				{
-					mySet->Control_B_Invite = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("Keys_Players", MySettings[i]))
-				{
-					mySet->Keys_Players = StingNumbersInt(MySettings[i]);
-				}
-				else if (StringContains("Keys_Open", MySettings[i]))
-				{
-					mySet->Keys_Open = StingNumbersInt(MySettings[i]);
-					}
-				else if (StringContains("Keys_Clear", MySettings[i]))
-				{
-					mySet->Keys_Clear = StingNumbersInt(MySettings[i]);
-					}
-				else if (StringContains("Keys_Invite", MySettings[i]))
-				{
-					mySet->Keys_Players = StingNumbersInt(MySettings[i]);
-				}
+				std::string line = setString[i];
+				if (StringContains("Pz_Lang", line))
+					MySettings.Pz_Lang = StingNumbersInt(line);
+				else if (StringContains("Aggression", line))
+					MySettings.Aggression = StingNumbersInt(line);
+				else if (StringContains("MaxPlayers", line))
+					MySettings.MaxPlayers = StingNumbersInt(line);
+				else if (StringContains("MinWait", line))
+					MySettings.MinWait = StingNumbersInt(line);
+				else if (StringContains("MaxWait", line))
+					MySettings.MaxWait = StingNumbersInt(line);
+				else if (StringContains("MinSession", line))
+					MySettings.MinSession = StingNumbersInt(line);
+				else if (StringContains("MaxSession", line))
+					MySettings.MaxSession = StingNumbersInt(line);
+				else if (StringContains("MinAccuracy", line))
+					MySettings.AccMin = StingNumbersInt(line);
+				else if (StringContains("MaxAccuracy", line))
+					MySettings.AccMax = StingNumbersInt(line);
+				else if (StringContains("AirVeh", line))
+					MySettings.AirVeh = StingNumbersInt(line);
+				else if (StringContains("TFHTA", line))
+					MySettings.TFHTA = StingNumbersInt(line);
+				else if (StringContains("FriendlyFire", line))
+					MySettings.FriendlyFire = StringBool(line);
+				else if (StringContains("SpaceWeaps", line))
+					MySettings.SpaceWeaps = StringBool(line);
+				else if (StringContains("NameTags", line))
+					MySettings.NameTags = StringBool(line);
+				else if (StringContains("PassiveMode", line))
+					MySettings.PassiveMode = StringBool(line);
+				else if (StringContains("Debug", line))
+					MySettings.Debugger = StringBool(line);
+				else if (StringContains("PlayerzBlips", line))
+					MySettings.PlayerzBlips = StringBool(line);
+				else if (StringContains("NoNotify", line))
+					MySettings.NoNotify = StringBool(line);
+				else if (StringContains("MobileData", line))
+					MySettings.MobileData = StringBool(line);
+				else if (StringContains("InviteOnly", line))
+					MySettings.InviteOnly = StringBool(line);
+				else if (StringContains("BackChat", line))
+					MySettings.BackChat = StringBool(line);
+				else if (StringContains("MenuLeftSide", line))
+					MySettings.MenuLeftSide = StringBool(line);
+				else if (StringContains("Control_A_Open_Menu=", line))
+					MySettings.Control_A_Open_Menu = StingNumbersInt(line);
+				else if (StringContains("Control_B_Open_Menu=", line))
+					MySettings.Control_B_Open_Menu = StingNumbersInt(line);
+				else if (StringContains("Control_A_Clear_Session=", line))
+					MySettings.Control_A_Clear_Session = StingNumbersInt(line);
+				else if (StringContains("Control_B_Clear_Session=", line))
+					MySettings.Control_B_Clear_Session = StingNumbersInt(line);
+				else if (StringContains("Control_A_Invite_Only=", line))
+					MySettings.Control_A_Invite_Only = StingNumbersInt(line);
+				else if (StringContains("Control_B_Invite_Only=", line))
+					MySettings.Control_B_Invite_Only = StingNumbersInt(line);
+				else if (StringContains("Keys_Open_Menu=", line))
+					MySettings.Keys_Open_Menu = StingNumbersInt(line);
+				else if (StringContains("Keys_Clear_Session=", line))
+					MySettings.Keys_Clear_Session = StingNumbersInt(line);
+				else if (StringContains("Keys_Invite_Only=", line))
+					MySettings.Keys_Invite_Only = StingNumbersInt(line);
+				else if (StringContains("Control_Keys_Players_List=", line))
+					MySettings.Control_Keys_Players_List = StingNumbersInt(line);
+				else if (StringContains("Control_Keys_AddPed=", line))
+					MySettings.Control_Keys_AddPed = StingNumbersInt(line);
+				else if (StringContains("Control_Keys_EnterVeh=", line))
+					MySettings.Control_Keys_EnterVeh = StingNumbersInt(line);
+				else if (StringContains("Control_Keys_DissmisPed=", line))
+					MySettings.Control_Keys_DissmisPed = StingNumbersInt(line);
 			}
 		}
 
-		if (mySet->Control_Players >= (int)ControlSym.size() || mySet->Control_Players < 0)
-			mySet->Control_Players = 19;
+		if (MySettings.Control_A_Open_Menu >= (int)ControlSym.size() || MySettings.Control_A_Open_Menu < 0)
+			MySettings.Control_A_Open_Menu = 46;
 
-		if (mySet->Control_Open >= (int)ControlSym.size() || mySet->Control_Open < 0)
-			mySet->Control_Open = 21;
+		if (MySettings.Control_B_Open_Menu >= (int)ControlSym.size() || MySettings.Control_B_Open_Menu < 0)
+			MySettings.Control_B_Open_Menu = 105;
 
-		if (mySet->Control_A_Clear >= (int)ControlSym.size() || mySet->Control_A_Clear < 0)
-			mySet->Control_A_Clear = 47;
+		if (MySettings.Control_A_Clear_Session >= (int)ControlSym.size() || MySettings.Control_A_Clear_Session < 0)
+			MySettings.Control_A_Clear_Session = 46;
 
-		if (mySet->Control_B_Clear >= (int)ControlSym.size() || mySet->Control_B_Clear < 0)
-			mySet->Control_B_Clear = 21;
+		if (MySettings.Control_B_Clear_Session >= (int)ControlSym.size() || MySettings.Control_B_Clear_Session < 0)
+			MySettings.Control_B_Clear_Session = 99;
 
-		if (mySet->Control_A_Invite >= (int)ControlSym.size() || mySet->Control_A_Invite < 0)
-			mySet->Control_A_Invite = 46;
+		if (MySettings.Control_A_Invite_Only >= (int)ControlSym.size() || MySettings.Control_A_Invite_Only < 0)
+			MySettings.Control_A_Invite_Only = 46;
 
-		if (mySet->Control_B_Invite >= (int)ControlSym.size() || mySet->Control_B_Invite < 0)
-			mySet->Control_B_Invite = 21;
+		if (MySettings.Control_B_Invite_Only >= (int)ControlSym.size() || MySettings.Control_B_Invite_Only < 0)
+			MySettings.Control_B_Invite_Only = 45;
 
-		if (mySet->Keys_Players >= (int)KeyFind.size() || mySet->Keys_Players < 0)
-			mySet->Keys_Players = 90;
+		if (MySettings.Keys_Open_Menu >= (int)KeyFind.size() || MySettings.Keys_Open_Menu < 0)
+			MySettings.Keys_Open_Menu = 90;
 
-		if (mySet->Keys_Open >= (int)KeyFind.size() || mySet->Keys_Open < 0)
-			mySet->Keys_Open = 88;
+		if (MySettings.Keys_Clear_Session >= (int)KeyFind.size() || MySettings.Keys_Clear_Session < 0)
+			MySettings.Keys_Clear_Session = 88;
 
-		if (mySet->Keys_Clear >= (int)KeyFind.size() || mySet->Keys_Clear < 0)
-			mySet->Keys_Clear = 67;
+		if (MySettings.Keys_Invite_Only >= (int)KeyFind.size() || MySettings.Keys_Invite_Only < 0)
+			MySettings.Keys_Invite_Only = 67;
 
-		if (mySet->Keys_Invite >= (int)KeyFind.size() || mySet->Keys_Invite < 0)
-			mySet->Keys_Invite = 86;
+		if (MySettings.Control_Keys_Players_List >= (int)ControlSym.size() || MySettings.Control_Keys_Players_List < 0)
+			MySettings.Control_Keys_Players_List = 236;
 
-		if (mySet->Aggression > 11)
-			mySet->Aggression = 11;
-		if (mySet->MinWait > mySet->MaxWait)
-			mySet->MaxWait = mySet->MinWait + 1;
-		if (mySet->MinSession > mySet->MaxSession)
-			mySet->MaxSession = mySet->MinSession + 1;
-		if (mySet->AccMin > mySet->AccMax)
-			mySet->AccMax = mySet->AccMin + 1;
+		if (MySettings.Control_Keys_AddPed >= (int)ControlSym.size() || MySettings.Control_Keys_AddPed < 0)
+			MySettings.Control_Keys_AddPed = 47;
 
-		ReBuildIni(mySet);
+		if (MySettings.Control_Keys_EnterVeh >= (int)ControlSym.size() || MySettings.Control_Keys_EnterVeh < 0)
+			MySettings.Control_Keys_EnterVeh = 47;
+
+		if (MySettings.Control_Keys_DissmisPed >= (int)ControlSym.size() || MySettings.Control_Keys_DissmisPed < 0)
+			MySettings.Control_Keys_DissmisPed = 46;
+
+		if (MySettings.Aggression > 11)
+			MySettings.Aggression = 11;
+		if (MySettings.MinWait > MySettings.MaxWait)
+			MySettings.MaxWait = MySettings.MinWait + 1;
+		if (MySettings.MinSession > MySettings.MaxSession)
+			MySettings.MaxSession = MySettings.MinSession + 1;
+		if (MySettings.AccMin > MySettings.AccMax)
+			MySettings.AccMax = MySettings.AccMin + 1;
+
+		ReBuildIni();
 	}
-	void LoadLang()
+
+	const std::vector<std::string> Lanfiles = {
+		"/PlayerZero/Translate/English.txt",
+		"/PlayerZero/Translate/French.txt",
+		"/PlayerZero/Translate/German.txt",
+		"/PlayerZero/Translate/Italian.txt",
+		"/PlayerZero/Translate/Spanish.txt",
+		"/PlayerZero/Translate/Portuguese.txt",
+		"/PlayerZero/Translate/Polish.txt",
+		"/PlayerZero/Translate/Russian.txt",
+		"/PlayerZero/Translate/Korean.txt",
+		"/PlayerZero/Translate/Chinese.txt",
+		"/PlayerZero/Translate/Japanese.txt",
+		"/PlayerZero/Translate/Spanish.txt",
+		"/PlayerZero/Translate/ChineseSimplify.txt"
+	};
+	void LoadLang(int lang)
 	{
-		LoggerLight("LoadLang lang == " + std::to_string(PZData::MySettings.Pz_Lang));
+		LoggerLight("LoadLang lang == " + std::to_string(lang));
 
-		int MyLan = PZData::MySettings.Pz_Lang;
-		std::vector<std::string> HoldMyLang = PZLang;
+		if (lang == -1)
+			lang = UNK::_GET_UI_LANGUAGE_ID(); // 2BDD44CC428A7EAE
 
-		if (MyLan == -1)
-			MyLan = UNK::_GET_UI_LANGUAGE_ID(); // 2BDD44CC428A7EAE
+		PZTranslate = ReadFile(GetDir() + Lanfiles[lang]);
 
-		if (MyLan == 0)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/English.txt");
-		else if (MyLan == 1)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/French.txt");
-		else if (MyLan == 2)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/German.txt");
-		else if (MyLan == 3)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/Italian.txt");
-		else if (MyLan == 4)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/Spanish.txt");
-		else if (MyLan == 5)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/Portuguese.txt");
-		else if (MyLan == 6)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/Polish.txt");
-		else if (MyLan == 7)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/Russian.txt");
-		else if (MyLan == 8)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/Korean.txt");
-		else if (MyLan == 9)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/Chinese.txt");
-		else if (MyLan == 10)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/Japanese.txt");
-		else if (MyLan == 11)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/Spanish.txt");
-		else if (MyLan == 12)
-			PZLang = ReadFile(GetDir() + "/PlayerZero/Translate/ChineseSimplify.txt");
+		if ((int)PZTranslate.size() < 165)
+			PZTranslate = PZLangEng;
 
-		if ((int)PZLang.size() < 108)
-			PZLang = HoldMyLang;
+		MySettings.Pz_Lang = lang;
+	}
 
-		MySettings.Pz_Lang = MyLan;
+	void StartScript(const std::string& scriptName, int buffer)
+	{
+		SCRIPT::REQUEST_SCRIPT((LPSTR)scriptName.c_str());
+		while (!SCRIPT::HAS_SCRIPT_LOADED((LPSTR)scriptName.c_str()))
+		{
+			SCRIPT::REQUEST_SCRIPT((LPSTR)scriptName.c_str());
+			WAIT(1);
+		}
+
+		SYSTEM::START_NEW_SCRIPT((LPSTR)scriptName.c_str(), buffer);
+		SCRIPT::SET_SCRIPT_AS_NO_LONGER_NEEDED((LPSTR)scriptName.c_str());
 	}
 }
