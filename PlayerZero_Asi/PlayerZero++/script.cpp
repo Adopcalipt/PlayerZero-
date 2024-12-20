@@ -17,8 +17,6 @@ using namespace PZData;
 #include <cmath>
 #include <Windows.h>
 
-std::vector<GVM::GVMSystem> Pz_MenuList = {};
-
 bool PrivateJet = false;
 bool BusDriver = false;
 bool RentoCop = false;
@@ -39,6 +37,8 @@ Hash Gp_Friend;
 Hash GP_Attack;
 Hash Gp_Follow;
 Hash GP_Mental;
+
+std::vector<GVM::GVMSystem> Pz_MenuList = {};
 
 JoinMe YouFriend = JoinMe(nullptr);
 
@@ -971,7 +971,7 @@ void BlipFiler(Blip* blip, int blippy, const std::string& name, int colour)
 	UI::_ADD_TEXT_COMPONENT_STRING((LPSTR)Name.c_str());
 	UI::END_TEXT_COMMAND_SET_BLIP_NAME(*blip);
 }
-void PedBlimp(Blip* blip, Ped peddy, int blippy, const std::string& name, int colour, bool heading)
+void PedBlimp(Blip* blip, Ped peddy, int blippy, const std::string& name, int colour, bool heading, bool passenger)
 {
 	LoggerLight("PedBlimp, blippy == " + std::to_string(blippy) + ", name == " + name + ", colour" + std::to_string(colour));
 
@@ -981,8 +981,14 @@ void PedBlimp(Blip* blip, Ped peddy, int blippy, const std::string& name, int co
 	*blip = UI::ADD_BLIP_FOR_ENTITY(peddy);;
 
 	BlipFiler(blip, blippy, name, colour);
-	if (heading)
+	if (passenger)
+		UI::SET_BLIP_SCALE(*blip, 0.01f);
+	else if (heading)
 		UI::_SET_BLIP_SHOW_HEADING_INDICATOR(*blip, true);
+}
+void PedBlimp(Blip* blip, Ped peddy, int blippy, const std::string& name, int colour, bool heading)
+{
+	PedBlimp(blip, peddy, blippy, name, colour, heading, false);
 }
 void LocalBlip(Blip* blip, Vector4 local, int blippy, const std::string& name, int colour)
 {
@@ -1004,7 +1010,7 @@ void BlipingBlip(PlayerBrain* brain)
 				if (brain->Driver && brain->ThisVeh != NULL)
 					PedBlimp(&brain->ThisBlip, brain->ThisPed, OhMyBlip(brain->ThisVeh), brain->MyName, brain->BlipColour, brain->DirBlip);
 				else
-					PedBlimp(&brain->ThisBlip, brain->ThisPed, 1, brain->MyName, brain->BlipColour, brain->DirBlip);
+					PedBlimp(&brain->ThisBlip, brain->ThisPed, 1, brain->MyName, brain->BlipColour, brain->DirBlip, true);
 			}
 		}
 		else
